@@ -167,6 +167,11 @@ target_include_directories(fullscreen_guard_client PRIVATE ${CMAKE_CURRENT_BINAR
 target_link_libraries(fullscreen_guard_client PRIVATE PkgConfig::WAYLAND_CLIENT)
 target_compile_options(fullscreen_guard_client PRIVATE -Wall -Wextra -Werror)
 
+add_executable(output_tracking_client nested/clients/output_tracking_client.cpp ${XDG_SHELL_HEADER} ${XDG_SHELL_CODE})
+target_include_directories(output_tracking_client PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(output_tracking_client PRIVATE PkgConfig::WAYLAND_CLIENT)
+target_compile_options(output_tracking_client PRIVATE -Wall -Wextra -Werror)
+
 add_executable(drag_source_client nested/clients/drag_source_client.cpp ${XDG_SHELL_HEADER} ${XDG_SHELL_CODE})
 target_include_directories(drag_source_client PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(drag_source_client PRIVATE PkgConfig::WAYLAND_CLIENT)
