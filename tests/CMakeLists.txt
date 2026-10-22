@@ -175,6 +175,11 @@ target_include_directories(tagged_overlay_client PRIVATE ${CMAKE_CURRENT_BINARY_
 target_link_libraries(tagged_overlay_client PRIVATE PkgConfig::WAYLAND_CLIENT)
 target_compile_options(tagged_overlay_client PRIVATE -Wall -Wextra -Werror)
 
+add_executable(output_tracking_client nested/clients/output_tracking_client.cpp ${XDG_SHELL_HEADER} ${XDG_SHELL_CODE})
+target_include_directories(output_tracking_client PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(output_tracking_client PRIVATE PkgConfig::WAYLAND_CLIENT)
+target_compile_options(output_tracking_client PRIVATE -Wall -Wextra -Werror)
+
 add_executable(drag_source_client nested/clients/drag_source_client.cpp ${XDG_SHELL_HEADER} ${XDG_SHELL_CODE})
 target_include_directories(drag_source_client PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(drag_source_client PRIVATE PkgConfig::WAYLAND_CLIENT)
