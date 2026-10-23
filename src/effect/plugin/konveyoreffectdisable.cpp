@@ -27,7 +27,7 @@ void KonveyorEffect::disable()
     QHash<const KWin::LogicalOutput *, int> placed;
     for (const Layout::WindowState &state : readEngine().windowStates()) {
         KWin::Window *window = d->windows.windowOf(state.id);
-        if (!window || window->isFullScreen() || window->isMinimized()) {
+        if (!window || window->isFullScreen() || window->isRequestedFullScreen() || window->isMinimized()) {
             continue;
         }
         const QRectF frame = window->moveResizeGeometry();

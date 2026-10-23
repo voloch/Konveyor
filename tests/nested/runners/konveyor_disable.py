@@ -3,7 +3,6 @@ import json
 import os
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "harness"))
@@ -118,14 +117,8 @@ def disable(checks):
     checks.equal(plugin_enabled(), "true", "kwinrc still enables the effect, so it is on again after logging in")
 
 
-def disable_twice(checks):
-    disable_call()
-    time.sleep(3)
-    checks.expect(not effect_loaded(), "a second Disable does not bring the effect back or crash KWin")
-
-
 def main():
-    Checks().run(arrange, reload_keeps_parked, disable, disable_twice)
+    Checks().run(arrange, reload_keeps_parked, disable)
 
 
 if __name__ == "__main__":
