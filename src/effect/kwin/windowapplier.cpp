@@ -67,6 +67,21 @@ void WindowApplier::apply(const QList<Layout::WindowState> &states)
     applyStacking(states);
 }
 
+void WindowApplier::restoreAppearance(const QList<Layout::WindowState> &states)
+{
+    const QScopedValueRollback guard(m_applying, true);
+    for (Layout::WindowState state : states) {
+        KWin::Window *window = m_windows.windowOf(state.id);
+        if (!window) {
+            continue;
+        }
+        state.ruleOpacity = 1.0;
+        state.clipToGeometry = false;
+        applyOpacity(window, state);
+        applyBorderRadius(window, state);
+    }
+}
+
 bool WindowApplier::isApplying() const
 {
     return m_applying;

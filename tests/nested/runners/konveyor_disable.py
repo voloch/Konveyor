@@ -7,10 +7,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "harness"))
 
-from checks import Checks
+from checks import Checks, default_config, load_config
 from fakepointer import move
-from kwinsession import (activate, active_title, frame, frames, intersects, konveyor, konveyor_action, konveyor_windows, managed_now, open_client, qdbus,
-                         run_script, wait_for)
+from kwinsession import (activate, active_title, for_window, frame, frames, intersects, konveyor, konveyor_action, konveyor_windows, managed_now,
+                         open_client, qdbus, run_script, wait_for)
 
 EFFECTS = ("org.kde.KWin", "/Effects")
 TITLES = ("A", "B", "C")
@@ -73,6 +73,17 @@ def reload_keeps_parked(checks):
     checks.expect(not wait_for(lambda: on_screen("C"), 3), f"C stays out of view after the reload ({frame('C')})")
 
 
+def opacity(title):
+    printed = run_script(for_window(title, 'print("MARK|" + w.opacity);'))
+    return float(printed[0]) if printed else None
+
+
+def opacity_rule(checks):
+    rule = '\nwindow-rule {\n    match title="^B$"\n    opacity 0.8\n}\n'
+    checks.expect(load_config(default_config() + rule), "a config with an opacity rule for B loads")
+    checks.expect(wait_for(lambda: opacity("B") == 0.8, 10), f"the rule makes B translucent while the effect runs ({opacity('B')})")
+
+
 def disable_call():
     return subprocess.run(["qdbus6", "org.kde.Konveyor", "/Konveyor", "org.kde.Konveyor.Disable"], capture_output=True, text=True)
 
@@ -114,11 +125,12 @@ def disable(checks):
     checks.expect(now and inside(now["C"], max(BEFORE["screens"].values())), f"C is on the right output ({now and now['C']})")
     checks.expect(now and all(abs(now["C"][index] - parked[index]) < 1 for index in (2, 3)), f"C has its tiled size ({parked[2:]} -> {now and now['C'][2:]})")
     checks.expect(now and all(now[title] == BEFORE["frames"][title] for title in ("A", "B")), f"A and B have not moved ({now})")
+    checks.equal(opacity("B"), 1.0, "B is opaque again, plain KDE has no rule opacity")
     checks.equal(plugin_enabled(), "true", "kwinrc still enables the effect, so it is on again after logging in")
 
 
 def main():
-    Checks().run(arrange, reload_keeps_parked, disable)
+    Checks().run(arrange, reload_keeps_parked, opacity_rule, disable)
 
 
 if __name__ == "__main__":

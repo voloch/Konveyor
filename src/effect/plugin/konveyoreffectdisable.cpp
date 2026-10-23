@@ -18,6 +18,8 @@ void KonveyorEffect::disable()
         return;
     }
     d->disabling = true;
+    const QList<Layout::WindowState> states = readEngine().windowStates();
+    d->applier.restoreAppearance(states);
 
     const QList<KWin::LogicalOutput *> outputs = KWin::workspace()->outputs();
     QList<QRectF> screens;
@@ -25,7 +27,7 @@ void KonveyorEffect::disable()
         screens.append(output->geometryF());
     }
     QHash<const KWin::LogicalOutput *, int> placed;
-    for (const Layout::WindowState &state : readEngine().windowStates()) {
+    for (const Layout::WindowState &state : states) {
         KWin::Window *window = d->windows.windowOf(state.id);
         if (!window || window->isFullScreen() || window->isRequestedFullScreen() || window->isMinimized()) {
             continue;

@@ -24,6 +24,7 @@ public:
     explicit WindowApplier(const WindowRegistry &windows);
 
     void apply(const QList<Layout::WindowState> &states);
+    void restoreAppearance(const QList<Layout::WindowState> &states);
     bool isApplying() const;
     bool isEchoOfAppliedSize(Layout::WindowId id, const QSizeF &size) const;
     bool isEchoOfAppliedFrame(Layout::WindowId id, const QRectF &frame) const;
