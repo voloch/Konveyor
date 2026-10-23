@@ -40,6 +40,18 @@ class TestCheatsheetEntries(unittest.TestCase):
         entries = self.entries("[konveyor-kontrol-panel]\ntoggle=none,Meta\\tAlt+F1,Open or close the Kontrol Panel\n")
         self.assertEqual([entry for entry in entries if entry["action"] == "Kontrol Panel: open"], [])
 
+    def test_lists_the_konveyor_on_off_keys(self):
+        entries = self.entries("[konveyor-kontrol-panel]\ntoggle-konveyor=Meta+Shift+Backspace,Meta+Shift+Backspace,Turn Konveyor on or off\n")
+        self.assertIn({"action": "Turn Konveyor on or off", "keys": ["Meta+Shift+Backspace"]}, entries)
+
+    def test_follows_the_konveyor_on_off_keys_the_user_changed(self):
+        entries = self.entries("[konveyor-kontrol-panel]\ntoggle-konveyor=Meta+Shift+Space,Meta+Shift+Backspace,Turn Konveyor on or off\n")
+        self.assertIn({"action": "Turn Konveyor on or off", "keys": ["Meta+Shift+Space"]}, entries)
+
+    def test_leaves_out_a_konveyor_on_off_without_keys(self):
+        entries = self.entries("[konveyor-kontrol-panel]\ntoggle-konveyor=none,Meta+Shift+Backspace,Turn Konveyor on or off\n")
+        self.assertEqual([entry for entry in entries if entry["action"] == "Turn Konveyor on or off"], [])
+
     def test_games_key_leaves_out_the_default_and_description(self):
         entries = self.entries(GAMES + "_launch=Meta+G,Meta+G,Kontrol Panel: Games\n")
         self.assertEqual(entries, [{"action": "Kontrol Panel: open on Games", "keys": ["Meta+G"]}])

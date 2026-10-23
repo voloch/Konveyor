@@ -182,6 +182,11 @@ def kde_entries(taken_keys):
             if keys:
                 yield WIDGETS_SECTION, {"action": "Kontrol Panel: open", "keys": keys}
             continue
+        if group == KONTROL_PANEL_GROUP and line.startswith("toggle-konveyor="):
+            keys = shortcut_keys(line.split("=", 1)[1])
+            if keys:
+                yield WIDGETS_SECTION, {"action": "Turn Konveyor on or off", "keys": keys}
+            continue
         if group not in KDE_SECTIONS or "=" not in line or line.startswith("_k_"):
             continue
         fields = split_shortcut_value(line.split("=", 1)[1])
