@@ -87,13 +87,17 @@ class TestKontrolPanelInstall(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.calls(), [
             [*KGLOBALACCEL, "unregister", "ss", "konveyor-kontrol-panel", "toggle"],
+            [*KGLOBALACCEL, "unregister", "ss", "konveyor-kontrol-panel", "toggle-konveyor"],
             [*KGLOBALACCEL, "setForeignShortcut", "asai", "4", *LAUNCHER, "3", "150994992", "16777250", "268435527"],
         ])
         self.assertFalse(self.state.exists())
 
-    def test_restore_without_taking_only_drops_the_kontrol_panel_shortcut(self):
+    def test_restore_without_taking_only_drops_both_kontrol_panel_shortcuts(self):
         self.assertEqual(self.run_steps("restore_launcher_keys").returncode, 0)
-        self.assertEqual(self.calls(), [[*KGLOBALACCEL, "unregister", "ss", "konveyor-kontrol-panel", "toggle"]])
+        self.assertEqual(self.calls(), [
+            [*KGLOBALACCEL, "unregister", "ss", "konveyor-kontrol-panel", "toggle"],
+            [*KGLOBALACCEL, "unregister", "ss", "konveyor-kontrol-panel", "toggle-konveyor"],
+        ])
 
     def test_installs_the_service_the_bus_activation_and_the_application(self):
         result = self.run_steps("install_kontrol_panel_service")

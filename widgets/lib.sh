@@ -236,6 +236,7 @@ take_launcher_keys() {
 
 restore_launcher_keys() {
     kglobalaccel unregister ss konveyor-kontrol-panel toggle >/dev/null 2>&1 || true
+    kglobalaccel unregister ss konveyor-kontrol-panel toggle-konveyor >/dev/null 2>&1 || true
     give_back_foreign_keys "$LAUNCHER_KEYS_STATE" "${PLASMA_LAUNCHER_ACTION[@]}"
 }
 
