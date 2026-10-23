@@ -69,17 +69,20 @@ void WindowApplier::apply(const QList<Layout::WindowState> &states)
 
 void WindowApplier::restoreAppearance(const QList<Layout::WindowState> &states)
 {
-    const QScopedValueRollback guard(m_applying, true);
-    for (Layout::WindowState state : states) {
-        KWin::Window *window = m_windows.windowOf(state.id);
-        if (!window) {
-            continue;
+    for (const Layout::WindowState &state : states) {
+        if (KWin::Window *window = m_windows.windowOf(state.id)) {
+            restoreAppearance(state.id, window);
         }
-        state.ruleOpacity = 1.0;
-        state.clipToGeometry = false;
-        applyOpacity(window, state);
-        applyBorderRadius(window, state);
     }
+}
+
+void WindowApplier::restoreAppearance(Layout::WindowId id, KWin::Window *window)
+{
+    const QScopedValueRollback guard(m_applying, true);
+    Layout::WindowState plain;
+    plain.id = id;
+    applyOpacity(window, plain);
+    applyBorderRadius(window, plain);
 }
 
 bool WindowApplier::isApplying() const

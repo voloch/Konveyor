@@ -133,6 +133,7 @@ void KonveyorEffect::connectWindowLifecycle()
         if (const std::optional<Layout::RestorePlacement> placement = readEngine().placementOf(id)) {
             rememberHiddenPlacement(window, *placement);
         }
+        d->applier.restoreAppearance(id, window);
     });
     connect(&d->windows, &WindowRegistry::propertiesChanged, this, [this](Layout::WindowId id) {
         if (KWin::Window *window = d->windows.windowOf(id)) {

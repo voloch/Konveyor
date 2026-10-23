@@ -129,8 +129,29 @@ def disable(checks):
     checks.equal(plugin_enabled(), "true", "kwinrc still enables the effect, so it is on again after logging in")
 
 
+def minimized(title, value):
+    run_script(for_window(title, f"w.minimized = {'true' if value else 'false'};"))
+
+
+def minimized_window_is_plain_after_disable(checks):
+    checks.equal(qdbus(*EFFECTS, "org.kde.kwin.Effects.loadEffect", "konveyor_effect"), "true", "the effect loads again")
+    checks.expect(wait_for(lambda: set(TITLES) <= managed_now(), 60), "the effect manages the open windows")
+    checks.expect(wait_for(lambda: opacity("B") == 0.8, 10), f"the rule makes B translucent again ({opacity('B')})")
+    minimized("B", True)
+    checks.expect(wait_for(lambda: "B" not in managed_now(), 10), "B leaves the layout when it is minimized")
+    minimized("B", False)
+    checks.expect(wait_for(lambda: "B" in managed_now() and opacity("B") == 0.8, 10), f"B is translucent again when it comes back ({opacity('B')})")
+    minimized("B", True)
+    checks.expect(wait_for(lambda: "B" not in managed_now(), 10), "B leaves the layout again")
+    result = disable_call()
+    checks.equal(result.returncode, 0, f"Disable is accepted ({(result.stdout + result.stderr).strip()})")
+    checks.expect(wait_for(lambda: not effect_loaded(), 10), "the effect unloads itself")
+    minimized("B", False)
+    checks.equal(opacity("B"), 1.0, "B, minimized when Konveyor was turned off, is opaque again")
+
+
 def main():
-    Checks().run(arrange, reload_keeps_parked, opacity_rule, disable)
+    Checks().run(arrange, reload_keeps_parked, opacity_rule, disable, minimized_window_is_plain_after_disable)
 
 
 if __name__ == "__main__":

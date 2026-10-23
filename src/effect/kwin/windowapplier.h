@@ -25,6 +25,7 @@ public:
 
     void apply(const QList<Layout::WindowState> &states);
     void restoreAppearance(const QList<Layout::WindowState> &states);
+    void restoreAppearance(Layout::WindowId id, KWin::Window *window);
     bool isApplying() const;
     bool isEchoOfAppliedSize(Layout::WindowId id, const QSizeF &size) const;
     bool isEchoOfAppliedFrame(Layout::WindowId id, const QRectF &frame) const;
