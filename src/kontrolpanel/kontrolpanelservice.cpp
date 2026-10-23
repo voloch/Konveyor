@@ -1,4 +1,5 @@
 #include "kontrolpanelservice.h"
+#include "konveyorswitch.h"
 
 #include <KWindowEffects>
 
@@ -97,6 +98,11 @@ void KontrolPanelService::Pin(const QStringList &files)
 void KontrolPanelService::Configure()
 {
     Q_EMIT configureRequested();
+}
+
+void KontrolPanelService::ToggleKonveyor()
+{
+    toggleKonveyor();
 }
 
 bool KontrolPanelService::IsOpen() const

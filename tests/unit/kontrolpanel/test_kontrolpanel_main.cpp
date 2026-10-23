@@ -11,6 +11,7 @@
 #include <QSignalSpy>
 #include <QTest>
 
+#include <algorithm>
 #include <csignal>
 #include <memory>
 
@@ -155,6 +156,25 @@ private Q_SLOTS:
         QCOMPARE(panel.call(QStringLiteral("Pin"), QStringList {QStringLiteral("/a.desktop")}).type(), QDBusMessage::ReplyMessage);
         QCOMPARE(panel.call(QStringLiteral("Configure")).type(), QDBusMessage::ReplyMessage);
         QCOMPARE(panel.call(QStringLiteral("setOpen"), false).type(), QDBusMessage::ErrorMessage);
+    }
+
+    void registersAShortcutToTurnKonveyorOnOrOff()
+    {
+        FakeKGlobalAccel kglobalaccel;
+        QVERIFY(kglobalaccel.start(m_session->address()));
+        start();
+        QDBusInterface panel(busName, QStringLiteral("/KontrolPanel"), busName, QDBusConnection::sessionBus());
+        QVERIFY(panel.call(QStringLiteral("IsOpen")).type() == QDBusMessage::ReplyMessage);
+        FakeKGlobalAccel::settle();
+        const QStringList actionId {QStringLiteral("konveyor-kontrol-panel"), QStringLiteral("toggle-konveyor"),
+            QStringLiteral("Kontrol Panel"), QStringLiteral("Turn Konveyor on or off")};
+        const QList<QDBusMessage> registered = kglobalaccel.calls(QStringLiteral("doRegister"));
+        QVERIFY(std::any_of(registered.cbegin(), registered.cend(),
+            [&actionId](const QDBusMessage &call) { return call.arguments().value(0).toStringList() == actionId; }));
+        QCOMPARE(kglobalaccel.keys(actionId.value(0), actionId.value(1)),
+            QList<QKeySequence> {QKeySequence(QStringLiteral("Meta+Shift+Backspace"))});
+        QCOMPARE(kglobalaccel.keys(QStringLiteral("konveyor-kontrol-panel"), QStringLiteral("toggle")),
+            QList<QKeySequence>({QKeySequence(Qt::Key_Meta), QKeySequence(Qt::ALT | Qt::Key_F1)}));
     }
 
     void keepsAShortcutTheUserChanged()

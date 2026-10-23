@@ -20,14 +20,26 @@
 namespace
 {
 
-void registerToggleShortcut(QAction &action, Konveyor::KontrolPanelService &service)
+void inKontrolPanelComponent(QAction &action, const QString &id, const QString &text)
 {
-    action.setObjectName(QStringLiteral("toggle"));
-    action.setText(QStringLiteral("Open or close the Kontrol Panel"));
+    action.setObjectName(id);
+    action.setText(text);
     action.setProperty("componentName", QStringLiteral("konveyor-kontrol-panel"));
     action.setProperty("componentDisplayName", QStringLiteral("Kontrol Panel"));
+}
+
+void registerToggleShortcut(QAction &action, Konveyor::KontrolPanelService &service)
+{
+    inKontrolPanelComponent(action, QStringLiteral("toggle"), QStringLiteral("Open or close the Kontrol Panel"));
     QObject::connect(&action, &QAction::triggered, &service, &Konveyor::KontrolPanelService::Toggle);
     KGlobalAccel::setGlobalShortcut(&action, QList<QKeySequence> {QKeySequence(Qt::Key_Meta), QKeySequence(Qt::ALT | Qt::Key_F1)});
+}
+
+void registerKonveyorShortcut(QAction &action, Konveyor::KontrolPanelService &service)
+{
+    inKontrolPanelComponent(action, QStringLiteral("toggle-konveyor"), QStringLiteral("Turn Konveyor on or off"));
+    QObject::connect(&action, &QAction::triggered, &service, &Konveyor::KontrolPanelService::ToggleKonveyor);
+    KGlobalAccel::setGlobalShortcut(&action, QKeySequence(Qt::META | Qt::SHIFT | Qt::Key_Backspace));
 }
 
 int alreadyRunning()
@@ -87,5 +99,7 @@ int main(int argc, char *argv[])
     }
     QAction toggle;
     registerToggleShortcut(toggle, service);
+    QAction toggleKonveyor;
+    registerKonveyorShortcut(toggleKonveyor, service);
     return QApplication::exec();
 }

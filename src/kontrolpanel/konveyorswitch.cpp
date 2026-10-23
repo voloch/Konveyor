@@ -14,4 +14,6 @@ QStringList konveyorEffectsToLoad(const QStringList &available, const KConfigGro
     return toLoad;
 }
 
+void toggleKonveyor() { }
+
 }

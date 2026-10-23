@@ -5,6 +5,7 @@
 #include <KConfigGroup>
 
 #include <QDBusConnection>
+#include <QElapsedTimer>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQuickItem>
@@ -44,6 +45,17 @@ private Q_SLOTS:
         QCOMPARE(hidden.count(), 1);
         QCOMPARE(pinned.first().first().toStringList(), QStringList {QStringLiteral("/usr/share/applications/org.kde.konsole.desktop")});
         QCOMPARE(configured.count(), 1);
+    }
+
+    void turningKonveyorOnOrOffDoesNotWaitForKWin()
+    {
+        KontrolPanelService service;
+        QElapsedTimer timer;
+        timer.start();
+        service.ToggleKonveyor();
+        service.ToggleKonveyor();
+        QVERIFY(timer.elapsed() < 1000);
+        QTest::qWait(50);
     }
 
     void reportsWhetherItIsOpen()

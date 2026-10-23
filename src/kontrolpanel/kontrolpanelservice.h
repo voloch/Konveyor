@@ -42,6 +42,7 @@ public Q_SLOTS:
     Q_SCRIPTABLE void Hide();
     Q_SCRIPTABLE void Pin(const QStringList &files);
     Q_SCRIPTABLE void Configure();
+    Q_SCRIPTABLE void ToggleKonveyor();
     Q_SCRIPTABLE bool IsOpen() const;
 
 Q_SIGNALS:
