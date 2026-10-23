@@ -271,6 +271,19 @@ QRectF parkedFrame(QRectF frame, QRectF home, const QList<QRectF> &outputs)
     return candidates.front();
 }
 
+QRectF unparkedFrame(QSizeF size, QRectF area, int index)
+{
+    constexpr double cascadeStart = 16.0;
+    constexpr double cascadeStep = 32.0;
+    const QSizeF clamped(std::min(size.width(), area.width()), std::min(size.height(), area.height()));
+    const double offset = cascadeStart + cascadeStep * index;
+    QPointF position = area.topLeft() + QPointF(offset, offset);
+    if (position.x() + clamped.width() > area.right() || position.y() + clamped.height() > area.bottom()) {
+        position = area.topLeft();
+    }
+    return QRectF(position, clamped);
+}
+
 PresetExtent measurePreset(const Config::PresetSize &preset, const Options &options, double viewSize, double reservedSize)
 {
     if (const auto *proportion = std::get_if<Config::Proportion>(&preset)) {

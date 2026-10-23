@@ -51,6 +51,7 @@ QPointF centerInArea(QRectF area, QSizeF size);
 
 qsizetype nearestOutputIndex(QPointF point, const QList<QRectF> &outputs);
 QRectF parkedFrame(QRectF frame, QRectF home, const QList<QRectF> &outputs);
+QRectF unparkedFrame(QSizeF size, QRectF area, int index);
 
 PresetExtent measurePreset(const Config::PresetSize &preset, const Options &options, double viewSize, double reservedSize);
 PresetExtent measureFloatingPreset(const Config::PresetSize &preset, double viewSize);

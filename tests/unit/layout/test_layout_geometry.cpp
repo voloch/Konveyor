@@ -312,6 +312,39 @@ private Q_SLOTS:
             QVERIFY(parksAtHome(QRectF(2600, 100, 1200, 1300), home, outputs));
         }
     }
+
+    void unparkedFrameStartsInsideTheArea()
+    {
+        const QRectF area(1920, 0, 1600, 900);
+        const QRectF frame = unparkedFrame(QSizeF(800, 600), area, 0);
+        QCOMPARE(frame, QRectF(1936, 16, 800, 600));
+        QVERIFY(area.contains(frame));
+    }
+
+    void unparkedFrameClampsAnOversizeFrame()
+    {
+        const QRectF area(1920, 0, 1600, 900);
+        const QRectF frame = unparkedFrame(QSizeF(5000, 4000), area, 0);
+        QCOMPARE(frame.size(), area.size());
+        QCOMPARE(frame.topLeft(), area.topLeft());
+        QVERIFY(area.contains(frame));
+    }
+
+    void unparkedFrameStepsBy32Pixels()
+    {
+        const QRectF area(1920, 0, 1600, 900);
+        QCOMPARE(unparkedFrame(QSizeF(400, 300), area, 0), QRectF(1936, 16, 400, 300));
+        QCOMPARE(unparkedFrame(QSizeF(400, 300), area, 1), QRectF(1968, 48, 400, 300));
+        QCOMPARE(unparkedFrame(QSizeF(400, 300), area, 2), QRectF(2000, 80, 400, 300));
+    }
+
+    void unparkedFrameWrapsWhenItWouldLeaveTheArea()
+    {
+        const QRectF area(1920, 0, 1600, 900);
+        const QRectF frame = unparkedFrame(QSizeF(800, 600), area, 40);
+        QCOMPARE(frame.topLeft(), area.topLeft());
+        QVERIFY(area.contains(frame));
+    }
 };
 
 QTEST_GUILESS_MAIN(TestLayoutGeometry)
