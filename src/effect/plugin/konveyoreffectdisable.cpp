@@ -33,7 +33,7 @@ void KonveyorEffect::disable()
             continue;
         }
         const QRectF frame = window->moveResizeGeometry();
-        if (std::ranges::any_of(screens, [&frame](const QRectF &screen) { return frame.intersects(screen); })) {
+        if (frame.isEmpty() || std::ranges::any_of(screens, [&frame](const QRectF &screen) { return frame.intersects(screen); })) {
             continue;
         }
         KWin::LogicalOutput *home = d->outputs.outputNamed(state.output);
