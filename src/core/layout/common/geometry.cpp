@@ -278,8 +278,11 @@ QRectF unparkedFrame(QSizeF size, QRectF area, int index)
     const QSizeF clamped(std::min(size.width(), area.width()), std::min(size.height(), area.height()));
     const double offset = cascadeStart + cascadeStep * index;
     QPointF position = area.topLeft() + QPointF(offset, offset);
-    if (position.x() + clamped.width() > area.right() || position.y() + clamped.height() > area.bottom()) {
-        position = area.topLeft();
+    if (position.x() + clamped.width() > area.right()) {
+        position.setX(area.left());
+    }
+    if (position.y() + clamped.height() > area.bottom()) {
+        position.setY(area.top());
     }
     return QRectF(position, clamped);
 }

@@ -345,6 +345,15 @@ private Q_SLOTS:
         QCOMPARE(frame.topLeft(), area.topLeft());
         QVERIFY(area.contains(frame));
     }
+
+    void unparkedFrameWrapsEachAxisOnItsOwn()
+    {
+        const QRectF area(1920, 0, 1600, 900);
+        QCOMPARE(unparkedFrame(QSizeF(400, 868), area, 0), QRectF(1936, 16, 400, 868));
+        QCOMPARE(unparkedFrame(QSizeF(400, 868), area, 1), QRectF(1968, 0, 400, 868));
+        QCOMPARE(unparkedFrame(QSizeF(400, 868), area, 2), QRectF(2000, 0, 400, 868));
+        QCOMPARE(unparkedFrame(QSizeF(1500, 300), area, 3), QRectF(1920, 112, 1500, 300));
+    }
 };
 
 QTEST_GUILESS_MAIN(TestLayoutGeometry)
