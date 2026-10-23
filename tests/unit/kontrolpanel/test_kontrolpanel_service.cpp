@@ -1,4 +1,8 @@
 #include "kontrolpanelservice.h"
+#include "konveyorswitch.h"
+
+#include <KConfig>
+#include <KConfigGroup>
 
 #include <QDBusConnection>
 #include <QQmlComponent>
@@ -12,6 +16,7 @@
 #include <memory>
 
 using Konveyor::KontrolPanelService;
+using Konveyor::konveyorEffectsToLoad;
 
 class TestKontrolPanelService : public QObject
 {
@@ -97,6 +102,54 @@ private Q_SLOTS:
     {
         KontrolPanelService service;
         service.applyBackgroundEffects(nullptr, QRegion(0, 0, 10, 10));
+    }
+
+    void loadsOnlyTheVersionedKonveyorIdOnALiveSystem()
+    {
+        KConfig config(QString(), KConfig::SimpleConfig);
+        KConfigGroup plugins = config.group(QStringLiteral("Plugins"));
+        plugins.writeEntry("konveyor_effect_1792757000Enabled", true);
+        plugins.writeEntry("konveyor_effectEnabled", false);
+        const QStringList available {QStringLiteral("blur"), QStringLiteral("konveyor_effect"),
+            QStringLiteral("konveyor_effect_1792757000"), QStringLiteral("slidingpopups")};
+        QCOMPARE(konveyorEffectsToLoad(available, plugins), QStringList {QStringLiteral("konveyor_effect_1792757000")});
+    }
+
+    void loadsThePlainKonveyorIdWhenItIsEnabled()
+    {
+        KConfig config(QString(), KConfig::SimpleConfig);
+        KConfigGroup plugins = config.group(QStringLiteral("Plugins"));
+        plugins.writeEntry("konveyor_effectEnabled", true);
+        const QStringList available {QStringLiteral("konveyor_effect")};
+        QCOMPARE(konveyorEffectsToLoad(available, plugins), available);
+    }
+
+    void loadsNothingWhenNoKonveyorIdIsConfigured()
+    {
+        KConfig config(QString(), KConfig::SimpleConfig);
+        KConfigGroup plugins = config.group(QStringLiteral("Plugins"));
+        const QStringList available {QStringLiteral("konveyor_effect")};
+        QCOMPARE(konveyorEffectsToLoad(available, plugins), QStringList {});
+    }
+
+    void ignoresEnabledEffectsThatAreNotKonveyor()
+    {
+        KConfig config(QString(), KConfig::SimpleConfig);
+        KConfigGroup plugins = config.group(QStringLiteral("Plugins"));
+        plugins.writeEntry("blurEnabled", true);
+        plugins.writeEntry("konveyor_effectEnabled", true);
+        const QStringList available {QStringLiteral("blur"), QStringLiteral("konveyor_effect")};
+        QCOMPARE(konveyorEffectsToLoad(available, plugins), QStringList {QStringLiteral("konveyor_effect")});
+    }
+
+    void keepsTheOrderOfTheAvailableEffects()
+    {
+        KConfig config(QString(), KConfig::SimpleConfig);
+        KConfigGroup plugins = config.group(QStringLiteral("Plugins"));
+        plugins.writeEntry("konveyor_effect_1Enabled", true);
+        plugins.writeEntry("konveyor_effect_2Enabled", true);
+        const QStringList available {QStringLiteral("konveyor_effect_2"), QStringLiteral("konveyor_effect_1")};
+        QCOMPARE(konveyorEffectsToLoad(available, plugins), available);
     }
 };
 
