@@ -124,6 +124,8 @@ def turn_on(checks):
     right_output_centre()
     open_client("D", managed=False)
     checks.expect(wait_for(lambda: active_title() == "D", 10), f"D has focus while Konveyor is off ({active_title()})")
+    activate("B")
+    checks.expect(wait_for(lambda: active_title() == "B", 10), f"B has focus while Konveyor is off ({active_title()})")
     press_toggle()
     checks.expect(wait_for(effect_loaded, 10), "the second press loads the effect")
     checks.expect(wait_for(lambda: {*TITLES, "D"} <= managed_now(), 60), "the effect manages A, B, C and D")
@@ -133,8 +135,8 @@ def turn_on(checks):
     new = layout()["D"]
     columns = {layout()[title][2][0] for title in TITLES}
     checks.expect(not new[1] and new[2][1] == 1 and new[2][0] not in columns, f"D is tiled as a new column ({new})")
-    checks.equal(active_title(), "D", "the window focused just before turning Konveyor back on keeps focus")
-    checks.equal(json.loads(konveyor("FocusedWindow")).get("title"), "D", "and it is the layout's focused window")
+    checks.equal(active_title(), "B", "the window focused just before turning Konveyor back on keeps focus, and it is not the newest window")
+    checks.equal(json.loads(konveyor("FocusedWindow")).get("title"), "B", "and it is the layout's focused window")
 
 
 def double_press(checks):
