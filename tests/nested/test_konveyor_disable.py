@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Park a window past the right edge of the right output, then reload the effect and check it stays parked."""
+"""Park a window past the right edge of the right output; reloading the effect keeps it parked, but Disable brings it back and unloads the effect."""
 import sys
 from pathlib import Path
 

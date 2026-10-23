@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 import json
+import os
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "harness"))
 
 from checks import Checks
 from fakepointer import move
-from kwinsession import activate, active_title, frame, frames, intersects, konveyor, konveyor_action, konveyor_windows, managed_now, open_client, qdbus, wait_for
+from kwinsession import (activate, active_title, frame, frames, intersects, konveyor, konveyor_action, konveyor_windows, managed_now, open_client, qdbus,
+                         run_script, wait_for)
 
 EFFECTS = ("org.kde.KWin", "/Effects")
 TITLES = ("A", "B", "C")
@@ -70,8 +74,58 @@ def reload_keeps_parked(checks):
     checks.expect(not wait_for(lambda: on_screen("C"), 3), f"C stays out of view after the reload ({frame('C')})")
 
 
+def disable_call():
+    return subprocess.run(["qdbus6", "org.kde.Konveyor", "/Konveyor", "org.kde.Konveyor.Disable"], capture_output=True, text=True)
+
+
+def effect_loaded():
+    return qdbus(*EFFECTS, "org.kde.kwin.Effects.isEffectLoaded", "konveyor_effect") == "true"
+
+
+def desktop_names():
+    return run_script('for (const d of workspace.desktops) print("MARK|" + d.name);')
+
+
+def plugin_enabled():
+    section = None
+    for line in (Path(os.environ["XDG_CONFIG_HOME"]) / "kwinrc").read_text().splitlines():
+        line = line.strip()
+        if line.startswith("["):
+            section = line
+        elif section == "[Plugins]" and line.startswith("konveyor_effectEnabled="):
+            return line.split("=", 1)[1]
+    return None
+
+
+def inside(frame_, screen):
+    return screen[0] <= frame_[0] and screen[1] <= frame_[1] and frame_[0] + frame_[2] <= screen[0] + screen[2] and frame_[1] + frame_[3] <= screen[1] + screen[3]
+
+
+def disable(checks):
+    result = disable_call()
+    checks.equal(result.returncode, 0, f"Disable is accepted ({(result.stdout + result.stderr).strip()})")
+    checks.expect(wait_for(lambda: not effect_loaded(), 10), "the effect unloads itself")
+    names = subprocess.run(["qdbus6"], capture_output=True, text=True).stdout.split()
+    checks.expect("org.kde.Konveyor" not in names, "org.kde.Konveyor is gone from the session bus")
+    checks.equal(desktop_names(), ["Mail", "Web", "Chat", "Music"], "KDE's four desktops are back with their names")
+    now = settled_frames()
+    checks.expect(now and all(any(intersects(window, screen) for screen in BEFORE["screens"].values()) for window in now.values()),
+                  f"every window intersects an output ({now})")
+    parked = BEFORE["frames"]["C"]
+    checks.expect(now and inside(now["C"], max(BEFORE["screens"].values())), f"C is on the right output ({now and now['C']})")
+    checks.expect(now and all(abs(now["C"][index] - parked[index]) < 1 for index in (2, 3)), f"C has its tiled size ({parked[2:]} -> {now and now['C'][2:]})")
+    checks.expect(now and all(now[title] == BEFORE["frames"][title] for title in ("A", "B")), f"A and B have not moved ({now})")
+    checks.equal(plugin_enabled(), "true", "kwinrc still enables the effect, so it is on again after logging in")
+
+
+def disable_twice(checks):
+    disable_call()
+    time.sleep(3)
+    checks.expect(not effect_loaded(), "a second Disable does not bring the effect back or crash KWin")
+
+
 def main():
-    Checks().run(arrange, reload_keeps_parked)
+    Checks().run(arrange, reload_keeps_parked, disable, disable_twice)
 
 
 if __name__ == "__main__":

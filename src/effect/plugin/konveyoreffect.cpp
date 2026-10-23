@@ -212,6 +212,9 @@ void KonveyorEffect::scheduleFlush()
 
 void KonveyorEffect::flush()
 {
+    if (d->disabling) {
+        return;
+    }
     const QList<Layout::WindowState> states = readEngine().windowStates();
     const QList<Layout::WorkspaceState> workspaces = readEngine().workspaceStates();
     endMoveIntoFullscreen(states);

@@ -131,6 +131,11 @@ QString DBusService::SetAppRule(const QString &json)
     return m_handlers.setAppRule(json);
 }
 
+void DBusService::Disable()
+{
+    m_handlers.disable();
+}
+
 bool DBusService::MultiTouchActive() const
 {
     return m_multiTouchActive;

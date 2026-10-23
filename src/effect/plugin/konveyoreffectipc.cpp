@@ -61,6 +61,7 @@ void KonveyorEffect::startDBusService()
         [this] { return QJsonDocument(Ipc::gesturesToJson(d->gestures.config())); },
         [this](const QString &json) { return appRulesJson(json); },
         [this](const QString &json) { return setAppRuleJson(json); },
+        [this] { disable(); },
     });
     d->dbus->registerService();
 }

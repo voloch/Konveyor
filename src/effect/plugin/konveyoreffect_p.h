@@ -133,6 +133,7 @@ struct KonveyorEffect::Private
     WindowMemoryStore memoryStore;
     LayoutHandoff handoff;
     bool animating = false;
+    bool disabling = false;
     QSet<KWin::ElectricBorder> reservedCorners;
     double dragOrigin = 0;
     QPointF resizeOrigin;
