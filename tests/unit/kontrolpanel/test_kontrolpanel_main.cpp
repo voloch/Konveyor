@@ -10,6 +10,7 @@
 #include <QDBusServiceWatcher>
 #include <QSignalSpy>
 #include <QTest>
+#include <QThread>
 
 #include <algorithm>
 #include <csignal>
@@ -48,6 +49,26 @@ Item {
 )";
 
 }
+
+// The /Effects object of KWin: loadedEffects and listOfEffects as properties, loadEffect answering true.
+struct KWinEffects
+{
+    KWinEffects(const QStringList &loaded, const QStringList &installed, int delayMs = 0)
+        : service(QStringLiteral("org.kde.KWin"), QStringLiteral("/Effects"), [loaded, installed, delayMs](const QDBusMessage &message) {
+            if (message.member() == QLatin1String("loadEffect")) {
+                return message.createReply(true);
+            }
+            if (message.member() != QLatin1String("Get")) {
+                return message.createErrorReply(QDBusError::UnknownMethod, message.member());
+            }
+            QThread::msleep(static_cast<unsigned long>(delayMs));
+            const bool askedForLoaded = message.arguments().value(1).toString() == QLatin1String("loadedEffects");
+            return message.createReply(QVariant::fromValue(QDBusVariant(askedForLoaded ? loaded : installed)));
+        })
+    { }
+
+    FakeService service;
+};
 
 class TestKontrolPanelMain : public QObject
 {
@@ -175,6 +196,67 @@ private Q_SLOTS:
             QList<QKeySequence> {QKeySequence(QStringLiteral("Meta+Shift+Backspace"))});
         QCOMPARE(kglobalaccel.keys(QStringLiteral("konveyor-kontrol-panel"), QStringLiteral("toggle")),
             QList<QKeySequence>({QKeySequence(Qt::Key_Meta), QKeySequence(Qt::ALT | Qt::Key_F1)}));
+    }
+
+    void toggleKonveyorTurnsTheEffectOffWhileKWinHasItLoaded()
+    {
+        KWinEffects kwin({QStringLiteral("kwin4_effect_fade"), QStringLiteral("konveyor_effect")}, {});
+        QVERIFY(kwin.service.start(m_session->address()));
+        FakeService konveyor(QStringLiteral("org.kde.Konveyor"), QStringLiteral("/Konveyor"),
+            [](const QDBusMessage &message) { return message.createReply(); });
+        QVERIFY(konveyor.start(m_session->address()));
+        start();
+        QDBusInterface panel(busName, QStringLiteral("/KontrolPanel"), busName, QDBusConnection::sessionBus());
+        QCOMPARE(panel.call(QStringLiteral("ToggleKonveyor")).type(), QDBusMessage::ReplyMessage);
+        QTRY_COMPARE(konveyor.calls(QStringLiteral("Disable")).size(), 1);
+        QVERIFY(kwin.service.calls(QStringLiteral("loadEffect")).isEmpty());
+    }
+
+    void toggleKonveyorLoadsOnlyWhatKwinrcEnablesWhileKWinHasNoKonveyor()
+    {
+        QVERIFY(writeFile(m_session->dir(QStringLiteral("config")) + QStringLiteral("/kwinrc"),
+            "[Plugins]\nkonveyor_effect_17Enabled=true\nkonveyor_effectEnabled=false\nkwin4_effect_fadeEnabled=true\n"));
+        KWinEffects kwin({QStringLiteral("kwin4_effect_fade")},
+            {QStringLiteral("kwin4_effect_fade"), QStringLiteral("konveyor_effect"), QStringLiteral("konveyor_effect_17")});
+        QVERIFY(kwin.service.start(m_session->address()));
+        start();
+        QDBusInterface panel(busName, QStringLiteral("/KontrolPanel"), busName, QDBusConnection::sessionBus());
+        QCOMPARE(panel.call(QStringLiteral("ToggleKonveyor")).type(), QDBusMessage::ReplyMessage);
+        QTRY_COMPARE(kwin.service.calls(QStringLiteral("loadEffect")).size(), 1);
+        QCOMPARE(
+            kwin.service.calls(QStringLiteral("loadEffect")).first().arguments().value(0).toString(), QStringLiteral("konveyor_effect_17"));
+    }
+
+    void aSecondPressIsIgnoredWhileTheFirstIsStillBeingAnswered()
+    {
+        KWinEffects kwin({QStringLiteral("konveyor_effect")}, {}, 300);
+        QVERIFY(kwin.service.start(m_session->address()));
+        FakeService konveyor(QStringLiteral("org.kde.Konveyor"), QStringLiteral("/Konveyor"),
+            [](const QDBusMessage &message) { return message.createReply(); });
+        QVERIFY(konveyor.start(m_session->address()));
+        start();
+        QDBusInterface panel(busName, QStringLiteral("/KontrolPanel"), busName, QDBusConnection::sessionBus());
+        QCOMPARE(panel.call(QStringLiteral("ToggleKonveyor")).type(), QDBusMessage::ReplyMessage);
+        QCOMPARE(panel.call(QStringLiteral("ToggleKonveyor")).type(), QDBusMessage::ReplyMessage);
+        QTRY_COMPARE(konveyor.calls(QStringLiteral("Disable")).size(), 1);
+        QTest::qWait(500);
+        QCOMPARE(konveyor.calls(QStringLiteral("Disable")).size(), 1);
+        QCOMPARE(panel.call(QStringLiteral("ToggleKonveyor")).type(), QDBusMessage::ReplyMessage);
+        QTRY_COMPARE(konveyor.calls(QStringLiteral("Disable")).size(), 2);
+    }
+
+    void aFailedPressDoesNotBlockTheNextOne()
+    {
+        FakeService kwin(QStringLiteral("org.kde.KWin"), QStringLiteral("/Effects"),
+            [](const QDBusMessage &message) { return message.createErrorReply(QDBusError::Failed, QStringLiteral("no effects today")); });
+        QVERIFY(kwin.start(m_session->address()));
+        start();
+        QDBusInterface panel(busName, QStringLiteral("/KontrolPanel"), busName, QDBusConnection::sessionBus());
+        QCOMPARE(panel.call(QStringLiteral("ToggleKonveyor")).type(), QDBusMessage::ReplyMessage);
+        QTRY_COMPARE(kwin.calls(QStringLiteral("Get")).size(), 1);
+        QTest::qWait(100);
+        QCOMPARE(panel.call(QStringLiteral("ToggleKonveyor")).type(), QDBusMessage::ReplyMessage);
+        QTRY_COMPARE(kwin.calls(QStringLiteral("Get")).size(), 2);
     }
 
     void keepsAShortcutTheUserChanged()
