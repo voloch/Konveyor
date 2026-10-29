@@ -182,6 +182,30 @@ class TestPanelSwap(unittest.TestCase):
         self.assertNotIn("org.devl0rd.taskbar", text)
         self.assertNotIn("icontasks", text)
 
+    PINS = "launchers=applications:org.kde.dolphin.desktop,applications:firefox.desktop\n"
+
+    def pin_while_off(self, new_pins):
+        self.konveyor_panel()
+        self.swap("off")
+        text = self.appletsrc.read_text()
+        self.assertIn(self.PINS, text)
+        self.appletsrc.write_text(text.replace(self.PINS, new_pins))
+        self.swap("on")
+        self.assertIn("plugin=org.devl0rd.taskbar", self.appletsrc.read_text())
+        return self.taskbarrc.read_text()
+
+    def test_pins_added_to_the_native_task_manager_while_off_reach_the_taskbar(self):
+        stored = self.pin_while_off(self.PINS.rstrip("\n") + ",applications:NEW.desktop\n")
+        self.assertIn(self.PINS.rstrip("\n") + ",applications:NEW.desktop\n", stored)
+
+    def test_pins_removed_from_the_native_task_manager_while_off_stay_removed(self):
+        stored = self.pin_while_off("launchers=applications:org.kde.dolphin.desktop\n")
+        self.assertIn("launchers=applications:org.kde.dolphin.desktop\n", stored)
+        self.assertNotIn("firefox", stored)
+
+    def test_pins_left_alone_while_off_round_trip(self):
+        self.assertIn(self.PINS, self.pin_while_off(self.PINS))
+
     def test_off_without_konveyor_widgets_does_nothing(self):
         self.appletsrc.write_text(STOCK)
         self.swap("off")

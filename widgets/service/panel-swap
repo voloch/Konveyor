@@ -83,11 +83,37 @@ swap_off() {
     if recorded launcher; then python3 "$service_dir/panel-launcher" uninstall "$appletsrc"; fi
 }
 
+# `panel-taskbar settings` keeps the pins stored for the taskbar over the ones in the applet. While Konveyor was off the native task
+# manager owns the pins, so when it has any, forget the stored ones and let the user's changes win.
+prefer_native_pins() {
+    python3 - "$service_dir" "$appletsrc" "$taskbarrc" <<'PY'
+import sys
+
+sys.path.insert(0, sys.argv[1])
+from appletsrc import panel_applets, read_groups, value, write_groups
+
+appletsrc, taskbarrc = sys.argv[2:]
+try:
+    groups = read_groups(appletsrc)
+    stored = read_groups(taskbarrc)
+except FileNotFoundError:
+    sys.exit(0)
+settings = {header: lines for header, lines in groups if header}
+managers = [header for _, header, lines in panel_applets(groups) if value(lines, "plugin") in ("org.kde.plasma.icontasks", "org.kde.plasma.taskmanager")]
+if any(value(settings.get(header + "[Configuration][General]", []), "launchers") is not None for header in managers):
+    write_groups(taskbarrc, [(header, [line for line in lines if line.partition("=")[0] != "launchers"] if header == "[General]" else lines)
+                             for header, lines in stored])
+PY
+}
+
 swap_on() {
     [[ -e $state_file ]] || return 0
     stop_plasma
     if recorded launcher; then python3 "$service_dir/panel-launcher" install "$appletsrc"; fi
-    if recorded taskbar; then python3 "$service_dir/panel-taskbar" install "$appletsrc"; fi
+    if recorded taskbar; then
+        prefer_native_pins
+        python3 "$service_dir/panel-taskbar" install "$appletsrc"
+    fi
     python3 "$service_dir/panel-taskbar" settings "$appletsrc" "$taskbarrc"
     rm -f "$state_file"
 }
