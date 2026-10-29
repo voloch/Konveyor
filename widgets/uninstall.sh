@@ -69,7 +69,7 @@ main() {
     rm -f "$LAUNCHER_SET_UP"
     python3 "$WIDGETS_DIR/service/panel-taskbar" uninstall "$CONFIG_HOME/plasma-org.kde.plasma.desktop-appletsrc" "$CONFIG_HOME/konveyor/taskbarrc"
     rm -f "$TASKBAR_SET_UP"
-    rm -f "$PANEL_OFF"
+    rm -f "$PANEL_OFF" "$(dirname "$PANEL_OFF")/panel-swap.lock"
     "$WIDGETS_DIR/desktop-hider/desktop-containment" uninstall
     for item in "${PLASMOIDS[@]}"; do
         kpackagetool6 -t Plasma/Applet -r "$item" >/dev/null 2>&1 && say "  removed $item" || true
