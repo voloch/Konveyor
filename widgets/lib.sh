@@ -12,6 +12,7 @@ LEGACY_SERVICES=(linux-system-monitor.service linux-process-mon.service linux-ro
 GAMES_DESKTOP_ID="org.devl0rd.portal.launcher.games.desktop"
 LAUNCHER_SET_UP="${XDG_STATE_HOME:-$HOME/.local/state}/konveyor/launcher-set-up"
 TASKBAR_SET_UP="${XDG_STATE_HOME:-$HOME/.local/state}/konveyor/taskbar-set-up"
+PANEL_OFF="${XDG_STATE_HOME:-$HOME/.local/state}/konveyor/panel-off"
 KONTROL_PANEL_DIR="$WIDGETS_DIR/portals/kontrol-panel"
 KONTROL_PANEL_UNIT="konveyor-kontrol-panel.service"
 KONTROL_PANEL_BUS="org.devl0rd.KontrolPanel"
@@ -367,6 +368,7 @@ take_over_launcher_and_restart() {
         mkdir -p "$(dirname "$TASKBAR_SET_UP")"
         touch "$TASKBAR_SET_UP"
     fi
+    "$WIDGETS_DIR/service/panel-swap" on --no-restart
     python3 "$WIDGETS_DIR/service/panel-taskbar" settings "$CONFIG_HOME/plasma-org.kde.plasma.desktop-appletsrc" "$CONFIG_HOME/konveyor/taskbarrc"
     trap - EXIT
     start_plasma

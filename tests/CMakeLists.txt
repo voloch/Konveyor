@@ -83,6 +83,9 @@ set_tests_properties(test_panel_taskbar PROPERTIES LABELS "unit;widgets")
 add_test(NAME test_panel_swap COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/unit/widgets/test_panel_swap.py)
 set_tests_properties(test_panel_swap PROPERTIES LABELS "unit;widgets")
 
+add_test(NAME test_install_panel_swap COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/unit/widgets/test_install_panel_swap.py)
+set_tests_properties(test_install_panel_swap PROPERTIES LABELS "unit;widgets")
+
 foreach(name test_kontrolpanel_service test_kontrolpanel_main_qml)
     add_executable(${name} unit/kontrolpanel/${name}.cpp)
     target_link_libraries(${name} PRIVATE konveyor_kontrolpanel Qt6::Qml Qt6::Test)
