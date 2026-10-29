@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Swap the Konveyor panel widgets (Kontrol Panel launcher, Konveyor Taskbar) for KDE's Kickoff and Icon-only Task Manager, and back.
+# `off` records which widgets it swapped; `on` puts back only those, so a widget the user removed stays removed.
+# Plasma rewrites its config on exit, so the edits happen while plasmashell is stopped (--no-restart: the caller already stopped it).
+set -euo pipefail
+
+PLASMA_SERVICE="plasma-plasmashell.service"
+LAUNCHER_PLUGIN="org.devl0rd.portal.launcher"
+TASKBAR_PLUGIN="org.devl0rd.taskbar"
+
+usage() {
+    echo "usage: panel-swap off|on [--no-restart]" >&2
+    exit 2
+}
+
+mode="${1-}"
+restart=1
+case "${2-}" in
+    "") ;;
+    --no-restart) restart=0 ;;
+    *) usage ;;
+esac
+[[ $# -le 2 && ( $mode == off || $mode == on ) ]] || usage
+
+service_dir="$(dirname "$(readlink -f "$0")")"
+config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/konveyor"
+appletsrc="$config_home/plasma-org.kde.plasma.desktop-appletsrc"
+taskbarrc="$config_home/konveyor/taskbarrc"
+state_file="$state_dir/panel-off"
+
+mkdir -p "$state_dir"
+exec 9>"$state_dir/panel-swap.lock"
+flock 9
+
+stopped=0
+
+start_plasma() {
+    if (( stopped )); then
+        systemctl --user reset-failed "$PLASMA_SERVICE" 2>/dev/null || true
+        systemctl --user start "$PLASMA_SERVICE"
+    fi
+}
+trap start_plasma EXIT
+
+stop_plasma() {
+    if (( restart )); then
+        stopped=1
+        systemctl --user stop "$PLASMA_SERVICE"
+    fi
+}
+
+has_plugin() {
+    grep -qxF "plugin=$1" "$appletsrc" 2>/dev/null
+}
+
+recorded() {
+    grep -qxF "$1" "$state_file"
+}
+
+swap_off() {
+    local swapped=()
+    if has_plugin "$LAUNCHER_PLUGIN"; then swapped+=(launcher); fi
+    if has_plugin "$TASKBAR_PLUGIN"; then swapped+=(taskbar); fi
+    (( ${#swapped[@]} )) || return 0
+    printf '%s\n' "${swapped[@]}" >"$state_file"
+    stop_plasma
+    python3 "$service_dir/panel-taskbar" settings "$appletsrc" "$taskbarrc"
+    if recorded taskbar; then python3 "$service_dir/panel-taskbar" uninstall "$appletsrc" "$taskbarrc"; fi
+    if recorded launcher; then python3 "$service_dir/panel-launcher" uninstall "$appletsrc"; fi
+}
+
+swap_on() {
+    [[ -e $state_file ]] || return 0
+    stop_plasma
+    if recorded launcher; then python3 "$service_dir/panel-launcher" install "$appletsrc"; fi
+    if recorded taskbar; then python3 "$service_dir/panel-taskbar" install "$appletsrc"; fi
+    python3 "$service_dir/panel-taskbar" settings "$appletsrc" "$taskbarrc"
+    rm -f "$state_file"
+}
+
+"swap_$mode"
