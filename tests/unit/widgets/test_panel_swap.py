@@ -44,11 +44,17 @@ echo "$*" >> "$FAKE_SYSTEMCTL_LOG"
 case "$2" in
     stop|start) cp "$XDG_CONFIG_HOME/plasma-org.kde.plasma.desktop-appletsrc" "$FAKE_SYSTEMCTL_LOG.$2" ;;
 esac
+case "$2" in
+    kill) touch "$FAKE_SYSTEMCTL_LOG.killed" ;;
+    stop) [ -n "$FAKE_HANG_UNTIL_KILLED" ] && [ ! -e "$FAKE_SYSTEMCTL_LOG.killed" ] && exec sleep 8 ;;
+esac
+exit 0
 """
 
 STOP = "--user stop plasma-plasmashell.service"
 RESET = "--user reset-failed plasma-plasmashell.service"
 START = "--user start plasma-plasmashell.service"
+KILL = "--user kill --signal=SIGKILL plasma-plasmashell.service"
 
 
 class TestPanelSwap(unittest.TestCase):
@@ -209,6 +215,33 @@ class TestPanelSwap(unittest.TestCase):
     def break_the_taskbar_settings(self):
         self.konveyor_panel(settings=False)
         (self.config / "konveyor").write_text("not a directory\n")
+
+    def test_a_normal_stop_never_kills_plasma(self):
+        self.konveyor_panel()
+        self.swap("off")
+        self.swap("on")
+        self.assertNotIn(KILL, self.calls())
+
+    def test_a_hung_plasma_is_killed_and_the_panel_still_swaps(self):
+        before = self.konveyor_panel()
+        self.environment.update(FAKE_HANG_UNTIL_KILLED="1", PANEL_SWAP_STOP_GRACE="1")
+        started = time.monotonic()
+        self.swap("off")
+        self.assertLess(time.monotonic() - started, 6)
+        self.assertEqual(self.calls(), [STOP, KILL, STOP, RESET, START])
+        self.assertEqual(self.snapshot("stop"), before)
+        self.assertNotIn("org.devl0rd", self.appletsrc.read_text())
+        self.assertEqual(self.snapshot("start"), self.appletsrc.read_text())
+
+    def test_a_hung_plasma_does_not_stop_the_panel_coming_back(self):
+        before = self.konveyor_panel()
+        self.swap("off")
+        self.log.unlink()
+        self.environment.update(FAKE_HANG_UNTIL_KILLED="1", PANEL_SWAP_STOP_GRACE="1")
+        Path(f"{self.log}.killed").unlink(missing_ok=True)
+        self.swap("on")
+        self.assertEqual(self.calls(), [STOP, KILL, STOP, RESET, START])
+        self.assertEqual(self.appletsrc.read_text(), before)
 
     def test_plasma_is_started_again_when_a_step_fails(self):
         self.break_the_taskbar_settings()

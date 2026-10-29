@@ -43,10 +43,15 @@ start_plasma() {
 }
 trap start_plasma EXIT
 
+# A hung plasmashell never finishes a normal stop: give it a few seconds, then SIGKILL it. The appletsrc is only edited
+# after this returns, so nothing depends on plasmashell answering or saving on exit.
 stop_plasma() {
     if (( restart )); then
         stopped=1
-        systemctl --user stop "$PLASMA_SERVICE"
+        if ! timeout "${PANEL_SWAP_STOP_GRACE:-5}" systemctl --user stop "$PLASMA_SERVICE"; then
+            systemctl --user kill --signal=SIGKILL "$PLASMA_SERVICE" || true
+            systemctl --user stop "$PLASMA_SERVICE"
+        fi
     fi
 }
 
