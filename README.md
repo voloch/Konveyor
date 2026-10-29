@@ -69,7 +69,7 @@ That's it. The installer grabs what it needs, builds Konveyor for your exact KWi
   </tr>
   <tr>
     <td>🧩 <b>Just the tiling</b></td>
-    <td>Run <code>./install.sh --no-widgets</code> to skip the widgets or remove them from an earlier install, or <code>./uninstall.sh --keep-widgets</code> to remove only the window manager.</td>
+    <td>Run <code>./install.sh --no-widgets</code> to skip the widgets or remove them from an earlier install, or <code>./uninstall.sh --keep-widgets</code> to remove only the window manager. Without the widgets there is no Kontrol Panel service, so no <a href="#toggle">off switch</a> either.</td>
   </tr>
   <tr>
     <td>📁 <b>Another location</b></td>
@@ -434,11 +434,42 @@ Every Konveyor setting lives in the Kontrol Panel. Press <kbd>Meta</kbd> + <kbd>
 | <kbd>Meta</kbd> + <kbd>K</kbd> | Open the Kontrol Panel on Shortcuts |
 | <kbd>Meta</kbd> | Open the Kontrol Panel |
 | <kbd>Meta</kbd> + <kbd>G</kbd> | Open the Kontrol Panel on your games |
+| <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>Backspace</kbd> | Turn Konveyor off, or back on ([details](#toggle)) |
 
 On a touchpad or touchscreen, see [Made for touch](#touch) for every gesture.
 
 > [!NOTE]
 > Konveyor leaves KDE's own shortcuts alone — <kbd>Alt</kbd> + <kbd>F4</kbd>, <kbd>Meta</kbd> + <kbd>L</kbd>, screenshots and the rest work as always. Change anything from the **Shortcuts** settings page. The 3- and 4-finger swipes replace KDE's desktop-switching and Overview swipes; pick other finger counts, or turn gestures off, on the **Touch & Gestures** settings page.
+
+<a id="toggle"></a>
+
+### ⏯️ Turn Konveyor off and on
+
+Press <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>Backspace</kbd> to get plain KDE back, and press it again to bring Konveyor back.
+
+| | What happens |
+| :-- | :-- |
+| **Off** | Tiling, borders and Konveyor's key binds go away, and window-rule opacity and rounded corners are undone. KDE's own shortcuts keep working. Windows that were scrolled out of view are moved back onto their display, cascaded from the top left of its work area. Fullscreen and minimized windows stay where they are. |
+| **On** | Konveyor loads again and puts each window back in its workspace, column and display, with its width, tabbed columns and floating windows as they were. Windows you opened while it was off join as new columns, and the focused window keeps focus. |
+
+Good to know:
+
+- **It lasts for the session.** The key never changes your Desktop Effects setting. `kwinrc` still lists Konveyor as enabled, so it is on again the next time KWin starts. The layout is kept inside the running KWin, so it survives off and on but not a KWin restart.
+- **It needs the Kontrol Panel service.** The widgets install provides it, so `./install.sh --no-widgets` takes the key away.
+- **It turns on only what Desktop Effects enables.** If you switched Konveyor off under **Desktop Effects**, the key has nothing to load.
+- **One press at a time.** A press that arrives while the last one is still being answered is ignored.
+
+To rebind it, open **System Settings → Keyboard → Shortcuts**, find **Kontrol Panel** and change **Turn Konveyor on or off**. Your change is kept.
+
+To toggle from a script, call the Kontrol Panel's D-Bus method. It flips the current state and returns at once.
+
+```sh
+busctl --user call org.devl0rd.KontrolPanel /KontrolPanel org.devl0rd.KontrolPanel ToggleKonveyor
+```
+
+While Konveyor is off, `org.kde.Konveyor` is gone from the session bus, so `busctl --user status org.kde.Konveyor` (it fails when Konveyor is off) tells a script which state it is in.
+
+If the key does nothing, check that the service runs with `systemctl --user status konveyor-kontrol-panel` and that nothing else owns the key under **Shortcuts**. If Konveyor turns off but not back on, `journalctl --user -u konveyor-kontrol-panel` shows `kwinrc enables no installed Konveyor effect, nothing to turn on`; enable Konveyor under **Desktop Effects**.
 
 ---
 
@@ -485,7 +516,7 @@ Yes. Install with <code>./install.sh --no-widgets</code>, or put the launcher ba
 <details>
 <summary><b>How do I get my old desktop back?</b></summary>
 <br>
-Turn Konveyor off under <b>Desktop Effects</b>, or run <code>./uninstall.sh</code>. Your shortcuts and window rules are restored.
+Turn Konveyor off under <b>Desktop Effects</b>, or run <code>./uninstall.sh</code>. Your shortcuts and window rules are restored. For a break that ends with your session, press <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>Backspace</kbd>; see <a href="#toggle">Turn Konveyor off and on</a>.
 </details>
 
 ---
