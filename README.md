@@ -69,7 +69,7 @@ That's it. The installer grabs what it needs, builds Konveyor for your exact KWi
   </tr>
   <tr>
     <td>🧩 <b>Just the tiling</b></td>
-    <td>Run <code>./install.sh --no-widgets</code> to skip the widgets or remove them from an earlier install, or <code>./uninstall.sh --keep-widgets</code> to remove only the window manager. Without the widgets there is no Kontrol Panel service, so no <a href="#toggle">off switch</a> either.</td>
+    <td>Run <code>./install.sh --no-widgets</code> to skip the widgets or remove them from an earlier install, or <code>./uninstall.sh --keep-widgets</code> to remove only the window manager. Without the widgets there is no Kontrol Panel service, so no <a href="#toggle">off switch</a> or panel swap either.</td>
   </tr>
   <tr>
     <td>📁 <b>Another location</b></td>
@@ -434,7 +434,7 @@ Every Konveyor setting lives in the Kontrol Panel. Press <kbd>Meta</kbd> + <kbd>
 | <kbd>Meta</kbd> + <kbd>K</kbd> | Open the Kontrol Panel on Shortcuts |
 | <kbd>Meta</kbd> | Open the Kontrol Panel |
 | <kbd>Meta</kbd> + <kbd>G</kbd> | Open the Kontrol Panel on your games |
-| <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>Backspace</kbd> | Turn Konveyor off, or back on ([details](#toggle)) |
+| <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>Backspace</kbd> | Turn Konveyor off, or back on, and swap the panel widgets with it ([details](#toggle)) |
 
 On a touchpad or touchscreen, see [Made for touch](#touch) for every gesture.
 
@@ -445,17 +445,44 @@ On a touchpad or touchscreen, see [Made for touch](#touch) for every gesture.
 
 ### ⏯️ Turn Konveyor off and on
 
-Press <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>Backspace</kbd> to get plain KDE back, and press it again to bring Konveyor back.
+Press <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>Backspace</kbd> to get plain KDE back, and press it again to bring Konveyor back. The key also swaps the panel widgets: see [The panel follows](#toggle-panel).
 
 | | What happens |
 | :-- | :-- |
-| **Off** | Tiling, borders and Konveyor's key binds go away, and window-rule opacity and rounded corners are undone. KDE's own shortcuts keep working. Windows that were scrolled out of view are moved back onto their display, cascaded from the top left of its work area. Fullscreen and minimized windows stay where they are. |
+| **Off** | Tiling, borders and Konveyor's key binds go away, and window-rule opacity and rounded corners are undone. KDE's own shortcuts keep working. Windows that were scrolled out of view are moved back onto their display, cascaded from the top left of its work area. Fullscreen and minimized windows stay where they are. The panel gets KDE's application launcher and task manager back. |
 | **On** | Konveyor loads again and puts each window back in its workspace, column and display, with its width, tabbed columns and floating windows as they were. Windows you opened while it was off join as new columns, and the focused window keeps focus. |
+
+<a id="toggle-panel"></a>
+
+#### The panel follows
+
+With the widgets installed, turning Konveyor off also swaps the two Konveyor panel widgets for KDE's.
+
+| Konveyor widget | Off | On |
+| :-- | :-- | :-- |
+| **Kontrol Panel launcher** | KDE's application launcher (Kickoff or Kicker, whichever the panel had before) | The Kontrol Panel launcher again |
+| **Konveyor Taskbar** | KDE's task manager | The Konveyor Taskbar again |
+
+Each widget keeps its place in the panel, and the taskbar keeps its pinned apps. If you pinned or unpinned apps in KDE's task manager while Konveyor was off, those pins carry over when it comes back. If the panel had no launcher or task manager of its own before the Konveyor widget took its place, nothing replaces it while Konveyor is off.
+
+What to expect:
+
+- **The panel blinks.** Plasma's panel restarts for each swap, so it disappears for a moment.
+- **A stuck panel is stopped.** If the Plasma shell does not stop within a few seconds, it is killed forcibly and started again.
+- **Only what was swapped comes back.** Turning Konveyor off records which Konveyor widgets were in the panel. Turning it on restores just those, so a widget you removed yourself stays removed.
+- **<kbd>Meta</kbd> still opens the Kontrol Panel.** The Kontrol Panel service keeps running while Konveyor is off, and it owns the key.
+- **Login follows Konveyor.** If you log in while Konveyor is off, the panel comes up with KDE's widgets. When Konveyor loads, the Kontrol Panel service swaps the Konveyor widgets back in. It checks every 2 seconds and gives up after 60 seconds.
+
+The swap's messages go to the user journal of the Kontrol Panel service:
+
+```sh
+journalctl --user -u konveyor-kontrol-panel
+```
 
 Good to know:
 
 - **It lasts for the session.** The key never changes your Desktop Effects setting. `kwinrc` still lists Konveyor as enabled, so it is on again the next time KWin starts. The layout is kept inside the running KWin, so it survives off and on but not a KWin restart.
-- **It needs the Kontrol Panel service.** The widgets install provides it, so `./install.sh --no-widgets` takes the key away.
+- **It needs the Kontrol Panel service.** The widgets install provides it, so `./install.sh --no-widgets` takes the key away, and with it the panel swap.
 - **It turns on only what Desktop Effects enables.** If you switched Konveyor off under **Desktop Effects**, the key has nothing to load.
 - **One press at a time.** A press that arrives while the last one is still being answered is ignored.
 
@@ -469,7 +496,7 @@ busctl --user call org.devl0rd.KontrolPanel /KontrolPanel org.devl0rd.KontrolPan
 
 While Konveyor is off, `org.kde.Konveyor` is gone from the session bus, so `busctl --user status org.kde.Konveyor` (it fails when Konveyor is off) tells a script which state it is in.
 
-If the key does nothing, check that the service runs with `systemctl --user status konveyor-kontrol-panel` and that nothing else owns the key under **Shortcuts**. If Konveyor turns off but not back on, `journalctl --user -u konveyor-kontrol-panel` shows `kwinrc enables no installed Konveyor effect, nothing to turn on`; enable Konveyor under **Desktop Effects**.
+If the key does nothing, or the panel does not swap, check that the service runs with `systemctl --user status konveyor-kontrol-panel` and that nothing else owns the key under **Shortcuts**. If Konveyor turns off but not back on, `journalctl --user -u konveyor-kontrol-panel` shows `kwinrc enables no installed Konveyor effect, nothing to turn on`; enable Konveyor under **Desktop Effects**.
 
 ---
 
@@ -516,7 +543,7 @@ Yes. Install with <code>./install.sh --no-widgets</code>, or put the launcher ba
 <details>
 <summary><b>How do I get my old desktop back?</b></summary>
 <br>
-Turn Konveyor off under <b>Desktop Effects</b>, or run <code>./uninstall.sh</code>. Your shortcuts and window rules are restored. For a break that ends with your session, press <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>Backspace</kbd>; see <a href="#toggle">Turn Konveyor off and on</a>.
+Turn Konveyor off under <b>Desktop Effects</b>, or run <code>./uninstall.sh</code>. Your shortcuts and window rules are restored. For a break that ends with your session, press <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>Backspace</kbd>, which also puts KDE's launcher and task manager back in the panel; see <a href="#toggle">Turn Konveyor off and on</a>.
 </details>
 
 ---
