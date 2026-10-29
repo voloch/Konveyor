@@ -59,11 +59,13 @@ recorded() {
 }
 
 swap_off() {
-    local swapped=()
+    local swapped=() record
     if has_plugin "$LAUNCHER_PLUGIN"; then swapped+=(launcher); fi
     if has_plugin "$TASKBAR_PLUGIN"; then swapped+=(taskbar); fi
     (( ${#swapped[@]} )) || return 0
-    printf '%s\n' "${swapped[@]}" >"$state_file"
+    # keep what an earlier off recorded: a widget that is native again now must still come back on
+    record="$({ printf '%s\n' "${swapped[@]}"; cat "$state_file" 2>/dev/null || true; } | sort -u)"
+    printf '%s\n' "$record" >"$state_file"
     stop_plasma
     python3 "$service_dir/panel-taskbar" settings "$appletsrc" "$taskbarrc"
     if recorded taskbar; then python3 "$service_dir/panel-taskbar" uninstall "$appletsrc" "$taskbarrc"; fi

@@ -187,6 +187,15 @@ class TestPanelSwap(unittest.TestCase):
         self.assertEqual(self.panel_off.read_text(), "launcher\ntaskbar\n")
         self.assertEqual(self.calls(), [STOP, RESET, START])
 
+    def test_off_keeps_what_an_earlier_off_recorded(self):
+        before = self.konveyor_panel()
+        self.swap("off")
+        subprocess.run([sys.executable, str(SERVICE / "panel-taskbar"), "install", str(self.appletsrc)], check=True, capture_output=True)
+        self.swap("off")
+        self.assertEqual(self.panel_off.read_text(), "launcher\ntaskbar\n")
+        self.swap("on")
+        self.assertEqual(self.appletsrc.read_text(), before)
+
     def test_no_restart_edits_the_panel_without_touching_plasma(self):
         before = self.konveyor_panel()
         self.swap("off", "--no-restart")
