@@ -103,7 +103,9 @@ private Q_SLOTS:
         m_panelSwapLog = m_session->dir(QStringLiteral("state")) + QStringLiteral("/panel-swap-%1.log").arg(QTest::currentTestFunction());
         QVERIFY(!QFile::exists(m_panelSwapLog) || QFile::remove(m_panelSwapLog));
         QVERIFY(!QFile::exists(panelOffState()) || QFile::remove(panelOffState()));
-        QVERIFY(writeFile(m_panelSwap, "#!/bin/sh\necho \"$@\" >> '" + m_panelSwapLog.toUtf8() + "'\n"));
+        QVERIFY(writeFile(m_panelSwap,
+            "#!/bin/sh\necho \"$@\" >> '" + m_panelSwapLog.toUtf8()
+                + "'\necho \"panel-swap stdout: $*\"\necho \"panel-swap stderr: $*\" >&2\n"));
         QVERIFY(QFile::setPermissions(m_panelSwap,
             QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner | QFile::ReadGroup | QFile::ExeGroup | QFile::ReadOther
                 | QFile::ExeOther));
@@ -442,6 +444,20 @@ private Q_SLOTS:
         QCOMPARE(panel.call(QStringLiteral("ToggleKonveyor")).type(), QDBusMessage::ReplyMessage);
         QTRY_COMPARE(kwin.service.calls(QStringLiteral("loadEffect")).size(), 1);
         QTRY_COMPARE(panelSwapCalls(), QStringList {QStringLiteral("on")});
+    }
+
+    void whatPanelSwapPrintsReachesTheOutputOfTheKontrolPanel()
+    {
+        KWinEffects kwin({QStringLiteral("konveyor_effect")}, {});
+        QVERIFY(kwin.service.start(m_session->address()));
+        start();
+        QByteArray out;
+        QByteArray err;
+        QTRY_VERIFY(([&] {
+            out += m_process->readAllStandardOutput();
+            err += m_process->readAllStandardError();
+            return out.contains("panel-swap stdout: on") && err.contains("panel-swap stderr: on");
+        })());
     }
 
     void toggleKonveyorDoesNotNeedThePanelSwapHelper()
