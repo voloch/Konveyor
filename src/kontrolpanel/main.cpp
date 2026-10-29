@@ -1,4 +1,5 @@
 #include "kontrolpanelservice.h"
+#include "konveyorswitch.h"
 
 #include <KConfigLoader>
 #include <KConfigPropertyMap>
@@ -101,5 +102,7 @@ int main(int argc, char *argv[])
     registerToggleShortcut(toggle, service);
     QAction toggleKonveyor;
     registerKonveyorShortcut(toggleKonveyor, service);
+    Konveyor::setPanelSwapHelper(QDir::cleanPath(directory.filePath(QStringLiteral("../../service/panel-swap"))));
+    Konveyor::swapPanelBackIfKonveyorIsLoaded();
     return QApplication::exec();
 }

@@ -7,6 +7,7 @@
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
 #include <QDBusVariant>
+#include <QProcess>
 
 #include <algorithm>
 #include <functional>
@@ -21,6 +22,7 @@ namespace
 const QString effectIdPrefix = QStringLiteral("konveyor_effect");
 
 bool pending = false;
+QString panelSwap;
 
 void whenFinished(const QDBusMessage &message, std::function<void(QDBusPendingCallWatcher &)> then)
 {
@@ -50,6 +52,19 @@ void warnIfFailed(const QDBusPendingCallWatcher &watcher, const char *what)
     }
 }
 
+bool hasKonveyorEffect(const QStringList &ids)
+{
+    return std::any_of(ids.cbegin(), ids.cend(), [](const QString &id) { return id.startsWith(effectIdPrefix); });
+}
+
+// Never blocks or fails the toggle: the panel keeps its widgets if the helper is missing or does not start.
+void swapPanel(const QString &mode)
+{
+    if (!QProcess::startDetached(panelSwap, {mode})) {
+        qWarning("konveyor-kontrol-panel: could not start %s %s", qPrintable(panelSwap), qPrintable(mode));
+    }
+}
+
 void turnOff()
 {
     whenFinished(QDBusMessage::createMethodCall(QStringLiteral("org.kde.Konveyor"), QStringLiteral("/Konveyor"),
@@ -57,6 +72,9 @@ void turnOff()
         [](QDBusPendingCallWatcher &watcher) {
             warnIfFailed(watcher, "turning Konveyor off");
             pending = false;
+            if (!watcher.isError()) {
+                swapPanel(QStringLiteral("off"));
+            }
         });
 }
 
@@ -70,17 +88,44 @@ void turnOn(const QStringList &available)
         pending = false;
         return;
     }
-    const auto remaining = std::make_shared<int>(toLoad.size());
+    struct Loading
+    {
+        int remaining;
+        bool anyLoaded = false;
+    };
+    const auto loading = std::make_shared<Loading>(Loading {static_cast<int>(toLoad.size())});
     for (const QString &id : toLoad) {
         QDBusMessage load = kwinEffects(QStringLiteral("org.kde.kwin.Effects"), QStringLiteral("loadEffect"));
         load << id;
-        whenFinished(load, [remaining](QDBusPendingCallWatcher &watcher) {
+        whenFinished(load, [loading](QDBusPendingCallWatcher &watcher) {
             warnIfFailed(watcher, "loading a Konveyor effect");
-            pending = --*remaining > 0;
+            const QDBusPendingReply<bool> loaded = watcher;
+            loading->anyLoaded = loading->anyLoaded || (!loaded.isError() && loaded.value());
+            pending = --loading->remaining > 0;
+            if (!pending && loading->anyLoaded) {
+                swapPanel(QStringLiteral("on"));
+            }
         });
     }
 }
 
+}
+
+void setPanelSwapHelper(const QString &path)
+{
+    panelSwap = path;
+}
+
+void swapPanelBackIfKonveyorIsLoaded()
+{
+    whenFinished(kwinEffectProperty(QStringLiteral("loadedEffects")), [](QDBusPendingCallWatcher &watcher) {
+        const QDBusPendingReply<QDBusVariant> loaded = watcher;
+        if (loaded.isError()) {
+            warnIfFailed(watcher, "asking KWin for the loaded effects");
+        } else if (hasKonveyorEffect(loaded.value().variant().toStringList())) {
+            swapPanel(QStringLiteral("on"));
+        }
+    });
 }
 
 QStringList konveyorEffectsToLoad(const QStringList &available, const KConfigGroup &plugins)
@@ -107,8 +152,7 @@ void toggleKonveyor()
             pending = false;
             return;
         }
-        const QStringList ids = loaded.value().variant().toStringList();
-        if (std::any_of(ids.cbegin(), ids.cend(), [](const QString &id) { return id.startsWith(effectIdPrefix); })) {
+        if (hasKonveyorEffect(loaded.value().variant().toStringList())) {
             turnOff();
             return;
         }
