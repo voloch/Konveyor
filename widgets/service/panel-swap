@@ -63,15 +63,21 @@ recorded() {
     grep -qxF "$1" "$state_file"
 }
 
+present_widgets() {
+    if has_plugin "$LAUNCHER_PLUGIN"; then echo launcher; fi
+    if has_plugin "$TASKBAR_PLUGIN"; then echo taskbar; fi
+}
+
 swap_off() {
-    local swapped=() record
-    if has_plugin "$LAUNCHER_PLUGIN"; then swapped+=(launcher); fi
-    if has_plugin "$TASKBAR_PLUGIN"; then swapped+=(taskbar); fi
-    (( ${#swapped[@]} )) || return 0
-    # keep what an earlier off recorded: a widget that is native again now must still come back on
-    record="$({ printf '%s\n' "${swapped[@]}"; cat "$state_file" 2>/dev/null || true; } | sort -u)"
-    printf '%s\n' "$record" >"$state_file"
+    local swapped record
+    [[ -n "$(present_widgets)" ]] || return 0
     stop_plasma
+    # plasmashell flushes the appletsrc when it exits, so only now do we know which widgets are really there
+    swapped="$(present_widgets)"
+    [[ -n $swapped ]] || return 0
+    # keep what an earlier off recorded: a widget that is native again now must still come back on
+    record="$({ printf '%s\n' "$swapped"; cat "$state_file" 2>/dev/null || true; } | sort -u)"
+    printf '%s\n' "$record" >"$state_file"
     python3 "$service_dir/panel-taskbar" settings "$appletsrc" "$taskbarrc"
     if recorded taskbar; then python3 "$service_dir/panel-taskbar" uninstall "$appletsrc" "$taskbarrc"; fi
     if recorded launcher; then python3 "$service_dir/panel-launcher" uninstall "$appletsrc"; fi

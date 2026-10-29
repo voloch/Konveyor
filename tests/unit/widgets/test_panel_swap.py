@@ -46,7 +46,8 @@ case "$2" in
 esac
 case "$2" in
     kill) touch "$FAKE_SYSTEMCTL_LOG.killed" ;;
-    stop) [ -n "$FAKE_HANG_UNTIL_KILLED" ] && [ ! -e "$FAKE_SYSTEMCTL_LOG.killed" ] && exec sleep 8 ;;
+    stop) [ -n "$FAKE_STOP_WRITES" ] && cp "$FAKE_STOP_WRITES" "$XDG_CONFIG_HOME/plasma-org.kde.plasma.desktop-appletsrc"
+          [ -n "$FAKE_HANG_UNTIL_KILLED" ] && [ ! -e "$FAKE_SYSTEMCTL_LOG.killed" ] && exec sleep 8 ;;
 esac
 exit 0
 """
@@ -101,6 +102,9 @@ class TestPanelSwap(unittest.TestCase):
     def applet(self, text, applet):
         return text.split(f"[Containments][1][Applets][{applet}]\n", 1)[1].split("\n[", 1)[0].rstrip("\n") + "\n"
 
+    def without_the_taskbar(self, text):
+        return re.sub(r"\[Containments\]\[1\]\[Applets\]\[4\]\n.*?\n\n", "", text, flags=re.S).replace("AppletOrder=2;4;3;5", "AppletOrder=2;3;5")
+
     def test_the_helper_is_executable(self):
         self.assertTrue(os.access(self.script, os.X_OK))
 
@@ -154,8 +158,7 @@ class TestPanelSwap(unittest.TestCase):
 
     def test_a_widget_removed_before_turning_off_stays_removed(self):
         self.konveyor_panel()
-        text = re.sub(r"\[Containments\]\[1\]\[Applets\]\[4\]\n.*?\n\n", "", self.appletsrc.read_text(), flags=re.S).replace("AppletOrder=2;4;3;5", "AppletOrder=2;3;5")
-        self.appletsrc.write_text(text)
+        self.appletsrc.write_text(self.without_the_taskbar(self.appletsrc.read_text()))
         self.swap("off")
         self.assertEqual(self.panel_off.read_text(), "launcher\n")
         self.swap("on")
@@ -165,6 +168,19 @@ class TestPanelSwap(unittest.TestCase):
         self.assertNotIn("icontasks", text)
         self.assertNotIn("taskmanager", text)
         self.assertIn("AppletOrder=2;3;5", text)
+
+    def test_a_widget_removed_just_before_off_is_not_recorded(self):
+        self.konveyor_panel()
+        flushed = Path(self.temporary.name) / "flushed-on-exit"
+        flushed.write_text(self.without_the_taskbar(self.appletsrc.read_text()))
+        self.environment["FAKE_STOP_WRITES"] = str(flushed)
+        self.swap("off")
+        self.assertEqual(self.panel_off.read_text(), "launcher\n")
+        del self.environment["FAKE_STOP_WRITES"]
+        self.swap("on")
+        text = self.appletsrc.read_text()
+        self.assertNotIn("org.devl0rd.taskbar", text)
+        self.assertNotIn("icontasks", text)
 
     def test_off_without_konveyor_widgets_does_nothing(self):
         self.appletsrc.write_text(STOCK)
