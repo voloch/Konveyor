@@ -44,6 +44,11 @@ echo "$*" >> "$FAKE_SYSTEMCTL_LOG"
 case "$2" in
     stop|start) cp "$XDG_CONFIG_HOME/plasma-org.kde.plasma.desktop-appletsrc" "$FAKE_SYSTEMCTL_LOG.$2" ;;
 esac
+if [ "$2" = stop ] && [ -n "$FAKE_STOP_LAUNCHES" ] && [ ! -e "$FAKE_SYSTEMCTL_LOG.launched" ]; then
+    touch "$FAKE_SYSTEMCTL_LOG.launched"
+    python3 "$FAKE_STOP_LAUNCHES" "$FAKE_SYSTEMCTL_LOG.concurrent"
+    sleep 1
+fi
 case "$2" in
     kill) touch "$FAKE_SYSTEMCTL_LOG.killed" ;;
     stop) [ -n "$FAKE_STOP_WRITES" ] && cp "$FAKE_STOP_WRITES" "$XDG_CONFIG_HOME/plasma-org.kde.plasma.desktop-appletsrc"

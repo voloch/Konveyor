@@ -352,6 +352,11 @@ start_plasma() {
 }
 
 take_over_launcher_and_restart() {
+    # Restarting the Kontrol Panel below can start `panel-swap on`; holding its lock makes it wait until the panel is settled
+    local swap_lock_dir="${XDG_STATE_HOME:-$HOME/.local/state}/konveyor" swap_lock_fd
+    mkdir -p "$swap_lock_dir"
+    exec {swap_lock_fd}>"$swap_lock_dir/panel-swap.lock"
+    flock "$swap_lock_fd"
     say "Restarting Plasma"
     systemctl --user stop "$PLASMA_SERVICE"
     trap start_plasma EXIT
@@ -368,8 +373,9 @@ take_over_launcher_and_restart() {
         mkdir -p "$(dirname "$TASKBAR_SET_UP")"
         touch "$TASKBAR_SET_UP"
     fi
-    "$WIDGETS_DIR/service/panel-swap" on --no-restart
+    PANEL_SWAP_LOCKED=1 "$WIDGETS_DIR/service/panel-swap" on --no-restart
     python3 "$WIDGETS_DIR/service/panel-taskbar" settings "$CONFIG_HOME/plasma-org.kde.plasma.desktop-appletsrc" "$CONFIG_HOME/konveyor/taskbarrc"
     trap - EXIT
     start_plasma
+    exec {swap_lock_fd}>&-
 }

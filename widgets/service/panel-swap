@@ -30,8 +30,11 @@ taskbarrc="$config_home/konveyor/taskbarrc"
 state_file="$state_dir/panel-off"
 
 mkdir -p "$state_dir"
-exec 9>"$state_dir/panel-swap.lock"
-flock 9
+# The installer holds this lock around its own stopped-Plasma window and sets PANEL_SWAP_LOCKED for the call it makes inside it.
+if [[ ${PANEL_SWAP_LOCKED-} != 1 ]]; then
+    exec 9>"$state_dir/panel-swap.lock"
+    flock 9
+fi
 
 stopped=0
 

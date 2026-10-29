@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -17,6 +18,12 @@ say() { printf '%s\n' "$*"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 source "$WIDGETS_DIR/lib.sh"
 take_over_launcher_and_restart
+"""
+
+# What systemd does when the restarted Kontrol Panel runs `panel-swap on`: a detached process that inherits no file descriptors.
+LAUNCH = """import subprocess, sys
+subprocess.Popen(["sh", "-c", '"$0" on; touch "$1"', "@PANEL_SWAP@", sys.argv[1]],
+                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 """
 
 
@@ -84,6 +91,24 @@ class TestInstallPanelSwap(unittest.TestCase):
         self.assertEqual(self.calls(), [STOP, RESET, START])
         self.assertEqual(self.snapshot("stop"), native)
         self.assertEqual(self.snapshot("start"), self.appletsrc.read_text())
+
+    def test_a_swap_started_by_the_restart_waits_for_the_install(self):
+        self.konveyor_panel()
+        self.swap_off()
+        launcher = Path(self.temporary.name) / "bin" / "launch-panel-swap"
+        launcher.write_text(LAUNCH.replace("@PANEL_SWAP@", str(SERVICE / "panel-swap")))
+        self.environment["FAKE_STOP_LAUNCHES"] = str(launcher)
+        self.take_over()
+        done = Path(f"{self.log}.concurrent")
+        deadline = time.monotonic() + 15
+        while not done.exists() and time.monotonic() < deadline:
+            time.sleep(0.1)
+        self.assertTrue(done.exists(), "the concurrent panel-swap never finished")
+        self.assertEqual(self.calls(), [STOP, RESET, START])
+        text = self.appletsrc.read_text()
+        self.assertEqual(text.count("plugin=org.devl0rd.portal.launcher"), 1)
+        self.assertEqual(text.count("plugin=org.devl0rd.taskbar"), 1)
+        self.assertFalse(self.panel_off.exists())
 
     def test_install_with_no_state_file_leaves_a_settled_panel_alone(self):
         self.konveyor_panel()
