@@ -7,7 +7,10 @@
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
 #include <QDBusVariant>
+#include <QDir>
+#include <QFile>
 #include <QProcess>
+#include <QTimer>
 
 #include <algorithm>
 #include <functional>
@@ -55,6 +58,20 @@ void warnIfFailed(const QDBusPendingCallWatcher &watcher, const char *what)
 bool hasKonveyorEffect(const QStringList &ids)
 {
     return std::any_of(ids.cbegin(), ids.cend(), [](const QString &id) { return id.startsWith(effectIdPrefix); });
+}
+
+// Where panel-swap records that it took the Konveyor widgets off the panel (see widgets/service/panel-swap).
+QString panelOffState()
+{
+    const QString stateHome = qEnvironmentVariable("XDG_STATE_HOME", QDir::homePath() + QStringLiteral("/.local/state"));
+    return stateHome + QStringLiteral("/konveyor/panel-off");
+}
+
+int millisecondsFrom(const char *variable, int fallback)
+{
+    bool ok = false;
+    const int value = qEnvironmentVariableIntValue(variable, &ok);
+    return ok && value > 0 ? value : fallback;
 }
 
 // Never blocks or fails the toggle: the panel keeps its widgets if the helper is missing or does not start.
@@ -109,6 +126,25 @@ void turnOn(const QStringList &available)
     }
 }
 
+// KWin may still be loading Konveyor when the Kontrol Panel starts at login: ask again every interval until the limit has passed, unless
+// panel-swap no longer records the widgets as taken off. Independent of pending, so a press is never held up.
+void swapPanelBackWhenKonveyorLoads(int intervalMs, int remainingMs)
+{
+    QTimer::singleShot(intervalMs, [intervalMs, remainingMs] {
+        if (!QFile::exists(panelOffState())) {
+            return;
+        }
+        whenFinished(kwinEffectProperty(QStringLiteral("loadedEffects")), [intervalMs, remainingMs](QDBusPendingCallWatcher &watcher) {
+            const QDBusPendingReply<QDBusVariant> loaded = watcher;
+            if (!loaded.isError() && hasKonveyorEffect(loaded.value().variant().toStringList())) {
+                swapPanel(QStringLiteral("on"));
+            } else if (remainingMs > intervalMs) {
+                swapPanelBackWhenKonveyorLoads(intervalMs, remainingMs - intervalMs);
+            }
+        });
+    });
+}
+
 }
 
 void setPanelSwapHelper(const QString &path)
@@ -120,10 +156,12 @@ void swapPanelBackIfKonveyorIsLoaded()
 {
     whenFinished(kwinEffectProperty(QStringLiteral("loadedEffects")), [](QDBusPendingCallWatcher &watcher) {
         const QDBusPendingReply<QDBusVariant> loaded = watcher;
-        if (loaded.isError()) {
-            warnIfFailed(watcher, "asking KWin for the loaded effects");
-        } else if (hasKonveyorEffect(loaded.value().variant().toStringList())) {
+        warnIfFailed(watcher, "asking KWin for the loaded effects");
+        if (!loaded.isError() && hasKonveyorEffect(loaded.value().variant().toStringList())) {
             swapPanel(QStringLiteral("on"));
+        } else if (QFile::exists(panelOffState())) {
+            swapPanelBackWhenKonveyorLoads(
+                millisecondsFrom("KONVEYOR_PANEL_SWAP_RETRY_MS", 2000), millisecondsFrom("KONVEYOR_PANEL_SWAP_RETRY_LIMIT_MS", 60000));
         }
     });
 }

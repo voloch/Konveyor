@@ -13,6 +13,7 @@
 #include <QThread>
 
 #include <algorithm>
+#include <atomic>
 #include <csignal>
 #include <memory>
 
@@ -51,11 +52,12 @@ Item {
 }
 
 // The /Effects object of KWin: loadedEffects and listOfEffects as properties, loadEffect answering true except for the ids in notLoading.
+// konveyorLoaded makes loadedEffects report a Konveyor effect from then on.
 struct KWinEffects
 {
     KWinEffects(const QStringList &loaded, const QStringList &installed, int delayMs = 0, const QStringList &notLoading = {})
         : service(QStringLiteral("org.kde.KWin"), QStringLiteral("/Effects"),
-              [loaded, installed, delayMs, notLoading](const QDBusMessage &message) {
+              [this, loaded, installed, delayMs, notLoading](const QDBusMessage &message) {
                   if (message.member() == QLatin1String("loadEffect")) {
                       return message.createReply(!notLoading.contains(message.arguments().value(0).toString()));
                   }
@@ -64,10 +66,15 @@ struct KWinEffects
                   }
                   QThread::msleep(static_cast<unsigned long>(delayMs));
                   const bool askedForLoaded = message.arguments().value(1).toString() == QLatin1String("loadedEffects");
-                  return message.createReply(QVariant::fromValue(QDBusVariant(askedForLoaded ? loaded : installed)));
+                  QStringList reported = askedForLoaded ? loaded : installed;
+                  if (askedForLoaded && konveyorLoaded) {
+                      reported.append(QStringLiteral("konveyor_effect"));
+                  }
+                  return message.createReply(QVariant::fromValue(QDBusVariant(reported)));
               })
     { }
 
+    std::atomic<bool> konveyorLoaded {false};
     FakeService service;
 };
 
@@ -95,6 +102,7 @@ private Q_SLOTS:
         QVERIFY(writeFile(m_directory + QStringLiteral("/Main.qml"), workingMain));
         m_panelSwapLog = m_session->dir(QStringLiteral("state")) + QStringLiteral("/panel-swap-%1.log").arg(QTest::currentTestFunction());
         QVERIFY(!QFile::exists(m_panelSwapLog) || QFile::remove(m_panelSwapLog));
+        QVERIFY(!QFile::exists(panelOffState()) || QFile::remove(panelOffState()));
         QVERIFY(writeFile(m_panelSwap, "#!/bin/sh\necho \"$@\" >> '" + m_panelSwapLog.toUtf8() + "'\n"));
         QVERIFY(QFile::setPermissions(m_panelSwap,
             QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner | QFile::ReadGroup | QFile::ExeGroup | QFile::ReadOther
@@ -365,6 +373,77 @@ private Q_SLOTS:
         QVERIFY(m_process->state() == QProcess::Running);
     }
 
+    void startupKeepsLookingForKonveyorWhileThePanelIsSwappedOut()
+    {
+        QVERIFY(writeFile(panelOffState(), "plugin=org.devl0rd.taskbar\n"));
+        KWinEffects kwin({QStringLiteral("kwin4_effect_fade")}, {});
+        QVERIFY(kwin.service.start(m_session->address()));
+        start(quickRetries(5000));
+        QTRY_VERIFY(kwin.service.calls(QStringLiteral("Get")).size() >= 3);
+        QCOMPARE(panelSwapCalls(), QStringList {});
+        kwin.konveyorLoaded = true;
+        QTRY_COMPARE(panelSwapCalls(), QStringList {QStringLiteral("on")});
+        QTest::qWait(300);
+        QCOMPARE(panelSwapCalls(), QStringList {QStringLiteral("on")});
+    }
+
+    void startupStopsLookingOnceThePanelIsNoLongerSwappedOut()
+    {
+        QVERIFY(writeFile(panelOffState(), "plugin=org.devl0rd.taskbar\n"));
+        KWinEffects kwin({QStringLiteral("kwin4_effect_fade")}, {});
+        QVERIFY(kwin.service.start(m_session->address()));
+        start(quickRetries(5000));
+        QTRY_VERIFY(kwin.service.calls(QStringLiteral("Get")).size() >= 3);
+        QVERIFY(QFile::remove(panelOffState()));
+        QTest::qWait(150);
+        const int asked = kwin.service.calls(QStringLiteral("Get")).size();
+        kwin.konveyorLoaded = true;
+        QTest::qWait(300);
+        QCOMPARE(kwin.service.calls(QStringLiteral("Get")).size(), asked);
+        QCOMPARE(panelSwapCalls(), QStringList {});
+    }
+
+    void startupGivesUpLookingAfterTheLimit()
+    {
+        QVERIFY(writeFile(panelOffState(), "plugin=org.devl0rd.taskbar\n"));
+        KWinEffects kwin({QStringLiteral("kwin4_effect_fade")}, {});
+        QVERIFY(kwin.service.start(m_session->address()));
+        start(quickRetries(400));
+        QTRY_VERIFY(kwin.service.calls(QStringLiteral("Get")).size() >= 3);
+        QTest::qWait(1000);
+        const int asked = kwin.service.calls(QStringLiteral("Get")).size();
+        QVERIFY(asked <= 1 + 400 / 50);
+        kwin.konveyorLoaded = true;
+        QTest::qWait(300);
+        QCOMPARE(kwin.service.calls(QStringLiteral("Get")).size(), asked);
+        QCOMPARE(panelSwapCalls(), QStringList {});
+    }
+
+    void startupDoesNotLookAgainWithoutTheSwappedOutRecord()
+    {
+        KWinEffects kwin({QStringLiteral("kwin4_effect_fade")}, {});
+        QVERIFY(kwin.service.start(m_session->address()));
+        start(quickRetries(5000));
+        QTRY_COMPARE(kwin.service.calls(QStringLiteral("Get")).size(), 1);
+        QTest::qWait(300);
+        QCOMPARE(kwin.service.calls(QStringLiteral("Get")).size(), 1);
+    }
+
+    void aPressIsNotBlockedWhileStartupKeepsLooking()
+    {
+        QVERIFY(writeFile(panelOffState(), "plugin=org.devl0rd.taskbar\n"));
+        QVERIFY(
+            writeFile(m_session->dir(QStringLiteral("config")) + QStringLiteral("/kwinrc"), "[Plugins]\nkonveyor_effect_17Enabled=true\n"));
+        KWinEffects kwin({QStringLiteral("kwin4_effect_fade")}, {QStringLiteral("konveyor_effect_17")});
+        QVERIFY(kwin.service.start(m_session->address()));
+        start(quickRetries(5000));
+        QTRY_VERIFY(kwin.service.calls(QStringLiteral("Get")).size() >= 3);
+        QDBusInterface panel(busName, QStringLiteral("/KontrolPanel"), busName, QDBusConnection::sessionBus());
+        QCOMPARE(panel.call(QStringLiteral("ToggleKonveyor")).type(), QDBusMessage::ReplyMessage);
+        QTRY_COMPARE(kwin.service.calls(QStringLiteral("loadEffect")).size(), 1);
+        QTRY_COMPARE(panelSwapCalls(), QStringList {QStringLiteral("on")});
+    }
+
     void toggleKonveyorDoesNotNeedThePanelSwapHelper()
     {
         QVERIFY(QFile::remove(m_panelSwap));
@@ -531,6 +610,17 @@ Window {
     }
 
 private:
+    QString panelOffState() const { return m_session->dir(QStringLiteral("state")) + QStringLiteral("/konveyor/panel-off"); }
+
+    // The session environment with the startup look-out asking KWin every 50 ms for limitMs.
+    QProcessEnvironment quickRetries(int limitMs) const
+    {
+        QProcessEnvironment environment = m_session->environment();
+        environment.insert(QStringLiteral("KONVEYOR_PANEL_SWAP_RETRY_MS"), QStringLiteral("50"));
+        environment.insert(QStringLiteral("KONVEYOR_PANEL_SWAP_RETRY_LIMIT_MS"), QString::number(limitMs));
+        return environment;
+    }
+
     // One entry per call the fake panel-swap helper got, e.g. "on".
     QStringList panelSwapCalls() const
     {
@@ -567,10 +657,12 @@ private:
         return QDBusConnection::sessionBus().call(update).type() == QDBusMessage::ReplyMessage;
     }
 
-    void start()
+    void start() { start(m_session->environment()); }
+
+    void start(const QProcessEnvironment &environment)
     {
         m_process = std::make_unique<QProcess>();
-        m_process->setProcessEnvironment(m_session->environment());
+        m_process->setProcessEnvironment(environment);
         QDBusServiceWatcher watcher(busName, QDBusConnection::sessionBus(), QDBusServiceWatcher::WatchForRegistration);
         QSignalSpy registered(&watcher, &QDBusServiceWatcher::serviceRegistered);
         m_process->start(QStringLiteral(KONVEYOR_KONTROL_PANEL), {m_directory});
