@@ -108,10 +108,20 @@ def unparked_window_returns_to_its_tile(checks):
     checks.equal(wandering, [], f"{TITLE} keeps its {tile[0]:.0f}px tile on {HOME} once unparked ({len(trail)} frames in {WATCH_SECONDS}s)")
 
 
+def flag_cleared_after_unpark(checks):
+    # Moving the unparked window far off screen must be undone by KWin's confinement again.
+    watch = ('const w = workspace.windowList().find(w => !w.deleted && w.caption == "' + TITLE + '");'
+             'const show = () => print("MARK|" + w.frameGeometry.x + "|" + w.frameGeometry.y + "|" + w.frameGeometry.width + "|" + w.frameGeometry.height);'
+             'show(); w.frameGeometryChanged.connect(show);'
+             'const g = w.frameGeometry; w.frameGeometry = {x: -5000, y: -5000, width: g.width + 2, height: g.height};')
+    trail = [tuple(float(value) for value in line.split("|")) for line in run_script(watch, 2)]
+    checks.equal([frame for frame in trail if not on_screen(frame) and not inside(frame, outputs()[HOME])], [], "KWin confines A again once it is unparked")
+
+
 def main():
     checks = Checks()
     try:
-        checks.run(two_monitors, open_row, parked_window_stays_parked, unparked_window_returns_to_its_tile)
+        checks.run(two_monitors, open_row, parked_window_stays_parked, unparked_window_returns_to_its_tile, flag_cleared_after_unpark)
     finally:
         for tracker in trackers:
             tracker.terminate()
