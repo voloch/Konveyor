@@ -10,8 +10,10 @@
 #include <inputmethod.h>
 #include <main.h>
 #include <scene/borderradius.h>
+#include <wayland_server.h>
 #include <window.h>
 #include <workspace.h>
+#include <xdgshellwindow.h>
 
 #include <QScopedValueRollback>
 
@@ -34,11 +36,41 @@ bool isUserManipulated(KWin::Window *window)
     return window->isInteractiveMove() || window->isInteractiveResize();
 }
 
+// KWin pulls a window back on screen whenever its client acknowledges a configure, unless this private flag is set. It is
+// otherwise only set during an interactive move, so a parked window has to borrow it. The friend function defined by the
+// explicit instantiation hands out the pointer to the private member. KWin exports no type information for
+// XdgToplevelWindow, so the window is looked up through its surface; X11 windows have none and are left alone.
+using UnrestrictedMember = bool KWin::XdgToplevelWindow::*;
+
+template<UnrestrictedMember Member> struct UnrestrictedAccess
+{
+    friend UnrestrictedMember unrestrictedMember() { return Member; }
+};
+
+UnrestrictedMember unrestrictedMember();
+template struct UnrestrictedAccess<&KWin::XdgToplevelWindow::m_isUnrestricted>;
+
+void exemptFromConfinement(KWin::Window *window, bool exempt)
+{
+    if (KWin::XdgToplevelWindow *toplevel = KWin::waylandServer()->findXdgToplevelWindow(window->surface())) {
+        toplevel->*unrestrictedMember() = exempt;
+    }
+}
+
 }
 
 WindowApplier::WindowApplier(const WindowRegistry &windows)
     : m_windows(windows)
 { }
+
+WindowApplier::~WindowApplier()
+{
+    for (const QPointer<KWin::Window> &window : std::as_const(m_parked)) {
+        if (window) {
+            exemptFromConfinement(window, false);
+        }
+    }
+}
 
 void WindowApplier::apply(const QList<Layout::WindowState> &states)
 {
@@ -54,6 +86,7 @@ void WindowApplier::apply(const QList<Layout::WindowState> &states)
             continue;
         }
         const QRectF frame = placedFrame(state);
+        setParked(state.id, window, frame != frameFor(state));
         const auto previous = m_appliedFrames.constFind(state.id);
         const std::optional<QSizeF> requestedSize = previous != m_appliedFrames.constEnd() ? std::optional(previous->size()) : std::nullopt;
         if (!frame.isEmpty()) {
@@ -83,6 +116,7 @@ void WindowApplier::restoreAppearance(Layout::WindowId id, KWin::Window *window)
     plain.id = id;
     applyOpacity(window, plain);
     applyBorderRadius(window, plain);
+    setParked(id, window, false);
 }
 
 bool WindowApplier::isApplying() const
@@ -128,6 +162,19 @@ void WindowApplier::forget(Layout::WindowId id)
     m_overriddenOpacity.remove(id);
     m_appliedFrames.remove(id);
     m_loggedTargets.remove(id);
+    if (const QPointer<KWin::Window> window = m_parked.take(id)) {
+        exemptFromConfinement(window, false);
+    }
+}
+
+void WindowApplier::setParked(Layout::WindowId id, KWin::Window *window, bool parked)
+{
+    if (parked) {
+        m_parked.insert(id, window);
+    } else if (!m_parked.remove(id)) {
+        return;
+    }
+    exemptFromConfinement(window, parked);
 }
 
 void WindowApplier::logTargetChange(KWin::Window *window, const Layout::WindowState &state)
