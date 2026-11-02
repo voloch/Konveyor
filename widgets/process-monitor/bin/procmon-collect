@@ -55,9 +55,9 @@ _KEYS = ("cpu", "ram", "threads", "gpu", "enc", "dec", "vram", "disk")
 _AKEYS = tuple("a" + key for key in _KEYS)
 
 
-def _base_row(pid, comm, ppid, own):
+def _base_row(pid, comm, ppid, own, start):
     row = {"pid": pid, "ppid": ppid, "name": comm}
-    icon = icons.resolve_icon(comm)
+    icon = icons.resolve_process_icon(pid, start, comm)
     if icon:
         row["icon"] = icon
     for key, value in zip(_KEYS, own):
@@ -74,6 +74,7 @@ def build():
     if icons.refresh_icon_map(tick):
         _row_cache.clear()
     procs, stat_changed = proc.read_procs()
+    icons.forget_gone(procs)
     io, io_changed = proc.read_io(procs)
     gpu = graphics.gpu_usage(_poll_interval)
     frames = graphics.frame_rates()
@@ -92,7 +93,7 @@ def build():
     rows = {}
     kids = {}
     kids_get = kids.get
-    for pid, (comm, ppid, t, rss, threads, _start) in procs.items():
+    for pid, (comm, ppid, t, rss, threads, start) in procs.items():
         ticks[pid] = t
         cached = previous_get(pid)
         g = gpu_get(pid) if gpu else None
@@ -108,7 +109,7 @@ def build():
             prev_io = pio.get(pid)
             disk = round(max(0.0, (cur_io - prev_io) * disk_scale)) if cur_io is not None and prev_io is not None else 0
             own = [cpu, rss, threads, g["gpu"], g["enc"], g["dec"], g["vram"], disk] if g else [cpu, rss, threads, 0, 0, 0, 0, disk]
-            base = _base_row(pid, comm, ppid, own)
+            base = _base_row(pid, comm, ppid, own, start)
             if frame:
                 base.update(frame)
             if g is None and frame is None and cpu == 0.0 and disk == 0:
@@ -134,12 +135,16 @@ def build():
     _prev["t"] = ticks
     _prev["io"] = io
     _prev["when"] = tick
-    focus_pid = _read_focus()
+    plasma_pid = min((pid for pid, row in rows.items() if row["name"] == "plasmashell"), default=0)
+    focus_pid = _focus_target(rows, plasma_pid)
     focused = rows.get(focus_pid)
     if focused is not None:
-        focused["name"], focused["icon"] = icons.process_identity(
-            focus_pid, _panel["focus_name"] or focused["name"], focused.get("icon", ""))
-    snap = {"ts": now, "ncpu": NCPU, "mem_total": MEM_TOTAL,
+        if focus_pid == plasma_pid:
+            focused["name"], focused["icon"] = "Plasma", "plasma"
+        else:
+            focused["name"], focused["icon"] = icons.process_identity(
+                focus_pid, _panel["focus_name"] or focused["name"], focused.get("icon", ""))
+    snap = {"ts": now, "ncpu": NCPU, "mem_total": MEM_TOTAL, "plasma_pid": plasma_pid,
             "vram_total": graphics.vram_total(), "procs": list(rows.values())}
     _panel["rows"] = rows
     _panel["totals"] = totals
@@ -179,6 +184,11 @@ def _read_focus():
     return _panel["focus"]
 
 
+def _focus_target(rows, plasma_pid):
+    pid = _read_focus()
+    return pid if pid in rows else plasma_pid
+
+
 def panel_snapshot(snap):
     rows = _panel["rows"]
     totals = _panel["totals"]
@@ -194,7 +204,7 @@ def panel_snapshot(snap):
     summary = {"count": len(snap["procs"]), "cpu": min(100, cpu), "gpu": min(100, gpu), "vram": vram,
                "memTotal": snap["mem_total"], "vramTotal": snap["vram_total"], "ncpu": snap["ncpu"], "gpuTop": gpu_top}
     focus = None
-    pid = _read_focus()
+    pid = _focus_target(rows, snap["plasma_pid"])
     row = rows.get(pid) if pid else None
     if row is not None:
         best = None

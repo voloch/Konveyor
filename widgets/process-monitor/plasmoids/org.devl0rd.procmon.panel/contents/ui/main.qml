@@ -111,6 +111,11 @@ PlasmoidItem {
         const name = tasks.activeTask ? tasks.data(tasks.activeTask, TaskManager.AbstractTasksModel.AppName) : ""
         return name ? String(name) : ""
     }
+    readonly property bool anyAppOpen: tasks.count > 0
+    onAnyAppOpenChanged: if (!anyAppOpen) {
+        lastActivePid = 0
+        lastActiveAppName = ""
+    }
     property int lastActivePid: 0
     property string lastActiveAppName: ""
     onActivePidChanged: if (activePid > 0) {
@@ -224,7 +229,7 @@ PlasmoidItem {
         id: watchdog
         active: root.dataWanted && root.runtimeDir !== ""
         staleAfter: Math.max(2000, Plasmoid.configuration.updateInterval * 4)
-        restartCommand: "$HOME/.local/bin/procmon-collect --restart"
+        restartCommand: "PATH=\"$HOME/.local/bin:$PATH\" procmon-collect --restart"
     }
     FileWatcher {
         path: root.dataWanted && root.compactOnly ? root.panelPath : ""
@@ -314,7 +319,7 @@ PlasmoidItem {
         DBus.SessionBus.asyncCall(message)
     }
     function applyInterval() {
-        actions.run("$HOME/.local/bin/procmon-collect --set-interval " + (Math.max(500, Plasmoid.configuration.updateInterval) / 1000))
+        actions.run("PATH=\"$HOME/.local/bin:$PATH\" procmon-collect --set-interval " + (Math.max(500, Plasmoid.configuration.updateInterval) / 1000))
     }
 
     ProcessRows { id: rowModel }

@@ -176,6 +176,20 @@ target_include_directories(fullscreen_guard_client PRIVATE ${CMAKE_CURRENT_BINAR
 target_link_libraries(fullscreen_guard_client PRIVATE PkgConfig::WAYLAND_CLIENT)
 target_compile_options(fullscreen_guard_client PRIVATE -Wall -Wextra -Werror)
 
+set(TOPLEVEL_TAG_XML ${WAYLAND_PROTOCOLS_DATA}/staging/xdg-toplevel-tag/xdg-toplevel-tag-v1.xml)
+set(TOPLEVEL_TAG_HEADER ${CMAKE_CURRENT_BINARY_DIR}/xdg-toplevel-tag-v1-client-protocol.h)
+set(TOPLEVEL_TAG_CODE ${CMAKE_CURRENT_BINARY_DIR}/xdg-toplevel-tag-v1-protocol.c)
+add_custom_command(OUTPUT ${TOPLEVEL_TAG_HEADER}
+    COMMAND ${WAYLAND_SCANNER} client-header ${TOPLEVEL_TAG_XML} ${TOPLEVEL_TAG_HEADER}
+    DEPENDS ${TOPLEVEL_TAG_XML})
+add_custom_command(OUTPUT ${TOPLEVEL_TAG_CODE}
+    COMMAND ${WAYLAND_SCANNER} private-code ${TOPLEVEL_TAG_XML} ${TOPLEVEL_TAG_CODE}
+    DEPENDS ${TOPLEVEL_TAG_XML})
+add_executable(tagged_overlay_client nested/clients/tagged_overlay_client.cpp ${XDG_SHELL_HEADER} ${XDG_SHELL_CODE} ${TOPLEVEL_TAG_HEADER} ${TOPLEVEL_TAG_CODE})
+target_include_directories(tagged_overlay_client PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(tagged_overlay_client PRIVATE PkgConfig::WAYLAND_CLIENT)
+target_compile_options(tagged_overlay_client PRIVATE -Wall -Wextra -Werror)
+
 add_executable(output_tracking_client nested/clients/output_tracking_client.cpp ${XDG_SHELL_HEADER} ${XDG_SHELL_CODE}
                ${FRACTIONAL_SCALE_HEADER} ${FRACTIONAL_SCALE_CODE})
 target_include_directories(output_tracking_client PRIVATE ${CMAKE_CURRENT_BINARY_DIR})

@@ -6,7 +6,7 @@ import types
 import unittest
 from unittest import mock
 
-from collectorharness import WIDGETS, CollectorTest, ServeLoopTests, run_main
+from collectorharness import WIDGETS, CollectorTest, ServeLoopTests, load_script, run_main
 
 SCRIPT = WIDGETS / "process-monitor" / "bin" / "procmon-collect"
 
@@ -66,11 +66,13 @@ class TestProcmonCollect(ServeLoopTests, CollectorTest):
         self.applications = self.home / "applications"
         self.applications.mkdir()
 
-    def process(self, pid, comm, ppid, ticks=0, threads=1, rss_pages=1, io=None, environ=b""):
+    def process(self, pid, comm, ppid, ticks=0, threads=1, rss_pages=1, io=None, environ=b"", flatpak=None):
         self.fake.write("/proc/%d/stat" % pid, stat_line(pid, comm, ppid, ticks, threads, rss_pages))
         if io is not None:
             self.fake.write("/proc/%d/io" % pid, "rchar: 1\nread_bytes: %d\nwrite_bytes: %d\ncancelled_write_bytes: 0\n" % io)
         (self.home / "root" / "proc" / str(pid) / "environ").write_bytes(environ)
+        if flatpak is not None:
+            self.fake.write("/proc/%d/root/.flatpak-info" % pid, "[Application]\nname=%s\nruntime=runtime/org.freedesktop.Platform/x86_64/24.08\n\n[Instance]\nbranch=stable\n" % flatpak)
 
     def module(self, pynvml=None):
         module = self.load(SCRIPT, "procmon_collect", pynvml=pynvml)
@@ -85,6 +87,13 @@ class TestProcmonCollect(ServeLoopTests, CollectorTest):
 
     def rows(self, snapshot):
         return {row["pid"]: row for row in snapshot["procs"]}
+
+    def test_scans_xdg_data_dirs_after_the_usual_application_dirs(self):
+        with mock.patch.dict(os.environ, {"XDG_DATA_DIRS": "/run/current-system/sw/share:/usr/share"}):
+            icons = load_script(SCRIPT.parent / "procmon_icons.py", "procmon_icons_xdg")
+        self.assertEqual(icons.DESKTOP_DIRS[0], "/usr/share/applications")
+        self.assertEqual(icons.DESKTOP_DIRS[-1], "/run/current-system/sw/share/applications")
+        self.assertEqual(icons.DESKTOP_DIRS.count("/usr/share/applications"), 1)
 
     def test_reports_cpu_memory_disk_and_threads_per_process(self):
         self.process(1, "systemd", 0, ticks=0, io=(0, 0))
@@ -159,6 +168,35 @@ class TestProcmonCollect(ServeLoopTests, CollectorTest):
         self.assertEqual(rows[25]["icon"], "com.google.Chrome")
         self.assertEqual(rows[26]["icon"], "com.vscodium.codium")
 
+    def write_real_flatpak_exports(self):
+        (self.applications / "com.valvesoftware.Steam.desktop").write_text(
+            "[Desktop Entry]\nName=Steam\nExec=/usr/bin/flatpak run --branch=stable --arch=x86_64 --command=/app/bin/steam --file-forwarding com.valvesoftware.Steam @@u %U @@\nIcon=com.valvesoftware.Steam\n")
+        (self.applications / "com.vscodium.codium.desktop").write_text(
+            "[Desktop Entry]\nName=VSCodium\nExec=/usr/bin/flatpak run --branch=stable --arch=x86_64 --command=codium --file-forwarding com.vscodium.codium @@ %F @@\nIcon=com.vscodium.codium\n")
+
+    def test_sandboxed_processes_take_the_icon_of_their_flatpak_app_id(self):
+        self.write_real_flatpak_exports()
+        self.process(40, "steam", 1, flatpak="com.valvesoftware.Steam")
+        self.process(41, "steam-runtime-l", 40, flatpak="com.valvesoftware.Steam")
+        self.process(42, "exe", 1, flatpak="com.vscodium.codium")
+        self.process(43, "codium", 42, flatpak="com.vscodium.codium")
+        self.process(44, "exe", 1)
+        rows = self.rows(self.build_at(self.module(), 100.0))
+        self.assertEqual(rows[40]["icon"], "com.valvesoftware.Steam")
+        self.assertEqual(rows[41]["icon"], "com.valvesoftware.Steam")
+        self.assertEqual(rows[42]["icon"], "com.vscodium.codium")
+        self.assertEqual(rows[43]["icon"], "com.vscodium.codium")
+        self.assertNotIn("icon", rows[44])
+
+    def test_a_reused_pid_does_not_keep_the_previous_apps_icon(self):
+        self.write_real_flatpak_exports()
+        module = self.module()
+        self.process(45, "exe", 1, flatpak="com.vscodium.codium")
+        self.assertEqual(self.rows(self.build_at(module, 100.0))[45]["icon"], "com.vscodium.codium")
+        self.fake.write("/proc/45/stat", stat_line(45, "exe", 1, 0, 1, 1, start=500))
+        os.remove(self.home / "root" / "proc" / "45" / "root" / ".flatpak-info")
+        self.assertNotIn("icon", self.rows(self.build_at(module, 101.0))[45])
+
     def test_unreadable_io_counts_as_no_disk_activity(self):
         self.process(30, "secret", 1, io=(5, 5))
         io = self.home / "root" / "proc" / "30" / "io"
@@ -215,6 +253,32 @@ class TestProcmonCollect(ServeLoopTests, CollectorTest):
         self.assertEqual(panel["focus"]["ram"], 150 * 4096)
         self.assertEqual(panel["focus"]["threads"], 3)
         self.assertEqual(panel["focus"]["fps"], -1)
+
+    def plasma_panel(self, focus_text):
+        self.process(1, "init", 0, io=(0, 0))
+        self.process(90, "plasmashell", 1, io=(0, 0))
+        self.process(91, "app", 1, io=(0, 0))
+        module = self.module()
+        (self.runtime / "Linux-Process-Mon").mkdir()
+        if focus_text is not None:
+            (self.runtime / "Linux-Process-Mon" / "focus").write_text(focus_text)
+        snapshot = self.build_at(module, 100.0)
+        module.panel_snapshot(snapshot)
+        panel = json.loads((self.runtime / "Linux-Process-Mon" / "panel" / "panel.json").read_text())
+        return snapshot, panel["focus"]
+
+    def test_no_focused_app_shows_plasma(self):
+        snapshot, focus = self.plasma_panel("0\n\n")
+        self.assertEqual((focus["pid"], focus["name"], focus["icon"]), (90, "Plasma", "plasma"))
+        self.assertEqual(snapshot["plasma_pid"], 90)
+
+    def test_a_focused_process_that_no_longer_exists_shows_plasma(self):
+        _, focus = self.plasma_panel("555\nGone\n")
+        self.assertEqual((focus["pid"], focus["name"]), (90, "Plasma"))
+
+    def test_a_running_focused_process_is_kept(self):
+        _, focus = self.plasma_panel("91\nApp\n")
+        self.assertEqual((focus["pid"], focus["name"]), (91, "App"))
 
     def test_frame_rates_from_a_child_show_on_the_focused_parent(self):
         self.process(1, "init", 0)
