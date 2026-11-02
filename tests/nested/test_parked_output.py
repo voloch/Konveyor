@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A window parked off every monitor stays there when its client answers a configure, so a mixed-scale setup never loops on scale changes."""
+"""A window parked off every monitor stays there when its client answers a configure, so a mixed-scale setup never loops on scale changes, and it returns to its tile once focused again."""
 import sys
 from pathlib import Path
 
