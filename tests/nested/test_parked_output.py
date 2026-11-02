@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep the client of a window parked off every monitor on its home output so a mixed-scale setup never flips its scale."""
+"""A window parked off every monitor stays there when its client answers a configure, so a mixed-scale setup never loops on scale changes."""
 import sys
 from pathlib import Path
 

@@ -1,3 +1,4 @@
+#include "fractional-scale-v1-client-protocol.h"
 #include "xdgclient.h"
 
 #include <cstdio>
@@ -17,6 +18,7 @@ struct Client
     wl_display *display = nullptr;
     XdgGlobals globals;
     std::list<Output> outputs;
+    wp_fractional_scale_manager_v1 *scaleManager = nullptr;
     wl_surface *surface = nullptr;
     xdg_surface *xdgSurface = nullptr;
     xdg_toplevel *toplevel = nullptr;
@@ -25,8 +27,6 @@ struct Client
     bool closed = false;
     int width = 600;
     int height = 400;
-    int bufferWidth = 0;
-    int bufferHeight = 0;
 };
 
 void outputGeometry(void *, wl_output *, int32_t, int32_t, int32_t, int32_t, int32_t, const char *, const char *, int32_t) { }
@@ -52,6 +52,9 @@ void bindOutput(void *data, wl_registry *registry, uint32_t name, const char *in
     if (std::strcmp(interface, wl_output_interface.name) == 0) {
         auto *output = static_cast<wl_output *>(wl_registry_bind(registry, name, &wl_output_interface, std::min(version, 4u)));
         wl_output_add_listener(output, &outputListener, &client->outputs.emplace_back());
+    } else if (std::strcmp(interface, wp_fractional_scale_manager_v1_interface.name) == 0) {
+        client->scaleManager = static_cast<wp_fractional_scale_manager_v1 *>(
+            wl_registry_bind(registry, name, &wp_fractional_scale_manager_v1_interface, 1));
     }
 }
 
@@ -80,22 +83,28 @@ void surfaceTransform(void *, wl_surface *, uint32_t) { }
 
 constexpr wl_surface_listener surfaceListener {surfaceEnter, surfaceLeave, surfaceScale, surfaceTransform};
 
+void preferredScale(void *, wp_fractional_scale_v1 *, uint32_t scale)
+{
+    std::printf("SCALE %u\n", scale);
+    std::fflush(stdout);
+}
+
+constexpr wp_fractional_scale_v1_listener scaleListener {preferredScale};
+
+// Like Chromium, answer every configure with a freshly rendered frame: KWin only runs its
+// geometry restrictions on a commit that acknowledges a configure.
 void surfaceConfigure(void *data, xdg_surface *surface, uint32_t serial)
 {
     auto *client = static_cast<Client *>(data);
     xdg_surface_ack_configure(surface, serial);
     const int width = client->width > 0 ? client->width : 600;
     const int height = client->height > 0 ? client->height : 400;
-    if (width != client->bufferWidth || height != client->bufferHeight) {
-        wl_buffer *previous = client->buffer;
-        client->buffer = makeSolidBuffer(client->globals.shm, width, height, 0xff3050b0u);
-        client->bufferWidth = width;
-        client->bufferHeight = height;
-        wl_surface_attach(client->surface, client->buffer, 0, 0);
-        wl_surface_damage_buffer(client->surface, 0, 0, width, height);
-        if (previous) {
-            wl_buffer_destroy(previous);
-        }
+    wl_buffer *previous = client->buffer;
+    client->buffer = makeSolidBuffer(client->globals.shm, width, height, 0xff3050b0u);
+    wl_surface_attach(client->surface, client->buffer, 0, 0);
+    wl_surface_damage_buffer(client->surface, 0, 0, width, height);
+    if (previous) {
+        wl_buffer_destroy(previous);
     }
     wl_surface_commit(client->surface);
     if (!client->mapped) {
@@ -146,6 +155,10 @@ int main(int argc, char **argv)
     wl_display_roundtrip(client.display);
     client.surface = wl_compositor_create_surface(client.globals.compositor);
     wl_surface_add_listener(client.surface, &surfaceListener, &client);
+    if (client.scaleManager) {
+        wp_fractional_scale_v1_add_listener(wp_fractional_scale_manager_v1_get_fractional_scale(client.scaleManager, client.surface),
+                                            &scaleListener, nullptr);
+    }
     client.xdgSurface = xdg_wm_base_get_xdg_surface(client.globals.shell, client.surface);
     xdg_surface_add_listener(client.xdgSurface, &xdgSurfaceListener, &client);
     client.toplevel = xdg_surface_get_toplevel(client.xdgSurface);
