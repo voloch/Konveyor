@@ -39,7 +39,7 @@ bool isUserManipulated(KWin::Window *window)
 // KWin pulls a window back on screen whenever its client acknowledges a configure, unless this private flag is set. It is
 // otherwise only set during an interactive move, so a parked window has to borrow it. The friend function defined by the
 // explicit instantiation hands out the pointer to the private member. KWin exports no type information for
-// XdgToplevelWindow, so the window is looked up through its surface; X11 windows have none and are left alone.
+// XdgToplevelWindow, so the window is looked up through its surface; X11 windows are not in waylandServer()->windows(), so the lookup is null and they are left alone.
 using UnrestrictedMember = bool KWin::XdgToplevelWindow::*;
 
 template<UnrestrictedMember Member> struct UnrestrictedAccess
